@@ -226,8 +226,8 @@ Si te han sugerido que "debe estar separado el back del front end", la excelente
 * Nuestro código se conecta **directamente** de forma ultra-segura desde el navegador del cliente a la base de datos cloud de Supabase utilizando tus claves públicas anónimas. Esto elimina la fricción de red, simplifica tu arquitectura a un solo contenedor estático ultra rápido, reduce costos de servidor y elimina fallos de caída de servidor backend.
 
 ### 🛠️ Lo que hemos optimizado para ti:
-1. **Configuración de puertos automatizada (`ports: "80:80"`):**
-   En tu `docker-compose.yml`, hemos mapeado el puerto `80:80` por defecto. Al desplegar el repositorio directamente desde tu panel de Hostinger, tu Landing Page responderá **directamente con tu Dominio o IP pública**, sin necesidad de ingresar puertos extraños (como `:8080`) en la barra del navegador.
+1. **Configuración de puertos automatizada (`ports: "3001:80"`):**
+   En tu `docker-compose.yml`, hemos mapeado el puerto `3001:80`. Esto expone tu Landing Page de forma segura en el puerto `3001`, permitiéndote configurar fácilmente proxies reversos o apuntar tu puerto en Hostinger.
 2. **Servidor Nginx de Alta Frecuencia con Gzip:**
    Hemos creado un archivo `/nginx.conf` dedicado. Al construir el contenedor, este activa de forma nativa la **compresión GZIP** (crítico para descargas ultrarrápidas de la página en teléfonos móviles desde campañas de pauta publicitaria en Meta y TikTok) y configura la regla de escape:
    `try_files $uri $uri/ /index.html;`
@@ -242,9 +242,9 @@ Si te han sugerido que "debe estar separado el back del front end", la excelente
    *Esto compilará los activos estáticos de producción usando Node.js, configurará las directivas de caché de Nginx y levantará el sitio en pocos segundos de forma aislada.*
 
 2. **Accede a la Landing Page:**
-   La aplicación estará expuesta directamente en el puerto standard:
-   *   Localmente: `http://localhost` (puerto `80`)
-   *   En tu servidor VPS: `http://TU-IP-O-DOMINIO`
+   La aplicación estará expuesta en el puerto `3001`:
+   *   Localmente: `http://localhost:3001`
+   *   En tu servidor VPS: `http://TU-IP-O-DOMINIO:3001`
 
 3. **Para detener los contenedores de forma segura:**
    ```bash
