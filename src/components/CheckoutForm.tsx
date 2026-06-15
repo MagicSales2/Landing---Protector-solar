@@ -273,32 +273,22 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
             <div className="grid grid-cols-1 gap-3 max-w-sm mx-auto">
               <div className="flex items-center gap-3 text-left">
                 <div className="w-6 h-6 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0 text-orange-600 font-bold text-xs">1</div>
-                <p className="text-xs text-slate-600 font-medium">Te enviaremos un mensaje de confirmación por <strong>WhatsApp</strong>.</p>
+                <p className="text-xs text-slate-600 font-medium">Te enviaremos una notificación de confirmación al celular provisto.</p>
               </div>
               <div className="flex items-center gap-3 text-left">
                 <div className="w-6 h-6 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0 text-orange-600 font-bold text-xs">2</div>
-                <p className="text-xs text-slate-600 font-medium font-sans">Despachamos de forma inmediata a tu dirección en Colombia.</p>
+                <p className="text-xs text-slate-600 font-medium font-sans">Despachamos de forma inmediata a tu dirección en Colombia sin costo.</p>
               </div>
             </div>
           </div>
 
           <div className="flex flex-col gap-2.5">
-            <a
-              href={`https://api.whatsapp.com/send?phone=573000000000&text=Hola!%20Acabo%20de%20hacer%20un%2520pedido%20con%20c%C3%B3digo%20${successOrder.id}.%20Mi%20nombre%20es%20${encodeURIComponent(successOrder.clientName)}.%20Por%20favor%20confirmar%20mi%20despacho.`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full flex items-center justify-center gap-2 font-bold bg-[#25D366] hover:bg-[#128C7E] text-white py-3.5 px-6 rounded-xl transition-all shadow-md text-sm md:text-base cursor-pointer"
-              id="success-whatsapp-button"
-            >
-              <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.249 8.477 3.517 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.455L0 24zm6.59-4.846c1.6.95 3.3 1.449 5.058 1.45h.007c5.54 0 10.05-4.51 10.054-10.051.002-2.685-1.047-5.21-2.958-7.114C16.83 1.529 14.308.471 11.62.472c-5.542 0-10.05 4.512-10.055 10.054-.001 1.91.499 3.778 1.447 5.392L1.936 21.73l5.93-1.557h-.001-1.22zM18.21 15.6c-.3-.15-1.78-.88-2.05-.98-.28-.1-.48-.15-.68.15-.2.3-.77.98-.95 1.18-.18.2-.35.23-.65.08-1.02-.51-1.75-.93-2.44-1.52-.51-.44-.81-.98-.91-1.18-.1-.2-.01-.3.08-.45.08-.13.18-.3.27-.45.09-.15.12-.25.18-.4.06-.15.03-.3-.02-.4-.05-.1-1.05-2.53-1.44-3.48-.38-.92-.77-.79-.95-.8h-.82c-.28 0-.74.1-1.13.52-.39.42-1.5 1.46-1.5 3.57 0 2.1 1.53 4.14 1.74 4.43.21.29 3.01 4.6 7.3 6.45 1.02.44 1.82.7 2.44.91 1.03.32 1.96.28 2.69.17.82-.12 1.77-.72 2.02-1.39.26-.67.26-1.24.18-1.39-.08-.14-.28-.24-.58-.39z" /></svg>
-              Confirmar Reserva por WhatsApp
-            </a>
-            
             <button
               onClick={resetOrderForm}
-              className="text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors py-2 cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 font-bold bg-slate-800 hover:bg-slate-900 text-white py-3.5 px-6 rounded-xl transition-all shadow-md text-sm md:text-base cursor-pointer"
+              id="success-new-order-button"
             >
-              Hacer otro pedido
+              Hacer otro pedido ✨
             </button>
           </div>
         </div>

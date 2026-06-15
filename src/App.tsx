@@ -590,7 +590,7 @@ export default function App() {
               <Star className="w-5 h-5 fill-red-500 stroke-red-500" />
             </div>
             <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest leading-tight">Soporte Activo</h4>
-            <p className="text-[10px] text-slate-500 mt-1">Acompañamiento y atención por WhatsApp inmediato.</p>
+            <p className="text-[10px] text-slate-500 mt-1">Acompañamiento y atención al cliente inmediata.</p>
           </div>
 
         </div>
@@ -607,7 +607,7 @@ export default function App() {
               Completa tu Pedido Aquí
             </h2>
             <p className="mt-2 text-xs text-slate-400">
-              Ingresa tus datos reales. Un asesor te enviará un WhatsApp de confirmación antes de despachar el paquete.
+              Ingresa tus datos reales. Procesamos tu pedido de manera inmediata para despacharlo hoy mismo.
             </p>
           </div>
 

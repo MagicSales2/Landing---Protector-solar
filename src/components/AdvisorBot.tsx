@@ -84,7 +84,7 @@ export default function AdvisorBot() {
 
     if (text.includes('tarda') || text.includes('demora') || text.includes('tiempo') || text.includes('dias') || text.includes('entrega') || text.includes('bogota') || text.includes('medellin') || text.includes('cali')) {
       return {
-        reply: '⏱️ **Plazos de Entrega para Colombia:**\n\n• **Ciudades Principales:** 1 a 2 días hábiles (Bogotá, Medellín, Cali, Barranquilla, Bucaramanga, Pereira, etc.).\n• **Resto del País y Municipios:** 3 a 5 días hábiles.\n\n*Nota:* Procesamos y despachamos en menos de 24 horas hábiles. Antes de enviar, nuestro equipo te escribirá un mensaje por **WhatsApp** para reconfirmar que estés disponible para recibir el paquete.',
+        reply: '⏱️ **Plazos de Entrega para Colombia:**\n\n• **Ciudades Principales:** 1 a 2 días hábiles (Bogotá, Medellín, Cali, Barranquilla, Bucaramanga, Pereira, etc.).\n• **Resto del País y Municipios:** 3 a 5 días hábiles.\n\n*Nota:* Procesamos y despachamos en menos de 24 horas hábiles. Nuestro equipo de despachos coordinará la entrega inmediata de tu paquete.',
         options: ['🚚 ¿Cómo funciona el envío contra entrega?', '🛍️ Ir al Formulario de Pedido']
       };
     }
