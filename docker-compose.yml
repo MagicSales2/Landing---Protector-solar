@@ -1,5 +1,23 @@
+version: '3.8'
+
+# ==========================================================
+# 🐳 Docker Compose - High Conversion Anthelios Landing Page
+# ==========================================================
+
 services:
   web:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: anthelios_landing_web
     ports:
-      - "8080:80"
+      # CAMBIO CLAVE PARA HOSTINGER VPS:
+      # Mapeamos el puerto 80 del exterior (Host VPS) directo al puerto 80 interno del contenedor (Nginx).
+      # Esto hace que cargue AL INSTANTE al visitar tu IP o tu Dominio sin tener que escribir ':8080' al final!
+      #
+      # NOTA: Si en tu VPS ya tienes ejecutando otra web en el puerto 80 (como Apache u otro Nginx del host),
+      # puedes cambiarlo aquí a "8080:80" o "3000:80" y configurar un proxy reverso desde tu panel de Hostinger.
+      - "80:80"
+    restart: always
+    environment:
+      - NODE_ENV=production

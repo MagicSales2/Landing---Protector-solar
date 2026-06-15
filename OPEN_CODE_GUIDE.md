@@ -216,25 +216,37 @@ El script de rastreo está implementado modularmente en `/src/lib/tracking.ts` y
 
 ---
 
-## 🐳 7. Contenedores con Docker y Docker Compose (Simplificado)
+## 🐳 7. Contenedores con Docker y Docker Compose (Optimizado para Hostinger VPS)
 
-Para simplificar el empaquetamiento, pruebas locales y despliegue continuo en tu servidor host (VPS, Hostinger Linux con Docker, AWS, o DigitalOcean), hemos incorporado soporte premium nativo para contenedores autónomos con tu **Dockerfile** de etapas múltiples y el archivo **docker-compose.yml** integrado.
+Hemos diseñado un empaquetamiento premium de alto rendimiento para que tu Landing Page vuele en Hostinger u otros servidores Docker utilizando un **Dockerfile** optimizado y un archivo **docker-compose.yml** listo para usar.
 
-### ¿Cómo arrancarlo en tu computador local o servidor de pruebas?
+### ❓ ¿Es necesario un Backend separado del Frontend? (La verdad sobre Supabase)
+Si te han sugerido que "debe estar separado el back del front end", la excelente noticia es que **con Supabase ya no es necesario configurar, programar, pagar ni mantener un contenedor de backend por separado**.
+* **¿Por qué?** Supabase es una plataforma BaaS (Backend-as-a-Service). Te brinda una API segura con filtros y seguridad a nivel de fila (Row Level Security - RLS).
+* Nuestro código se conecta **directamente** de forma ultra-segura desde el navegador del cliente a la base de datos cloud de Supabase utilizando tus claves públicas anónimas. Esto elimina la fricción de red, simplifica tu arquitectura a un solo contenedor estático ultra rápido, reduce costos de servidor y elimina fallos de caída de servidor backend.
 
-1. **Asegúrate de tener Docker instalado junto con su plugin de compose.**
-2. **Construye y levanta la aplicación con Docker Compose:**
+### 🛠️ Lo que hemos optimizado para ti:
+1. **Configuración de puertos automatizada (`ports: "80:80"`):**
+   En tu `docker-compose.yml`, hemos mapeado el puerto `80:80` por defecto. Al desplegar el repositorio directamente desde tu panel de Hostinger, tu Landing Page responderá **directamente con tu Dominio o IP pública**, sin necesidad de ingresar puertos extraños (como `:8080`) en la barra del navegador.
+2. **Servidor Nginx de Alta Frecuencia con Gzip:**
+   Hemos creado un archivo `/nginx.conf` dedicado. Al construir el contenedor, este activa de forma nativa la **compresión GZIP** (crítico para descargas ultrarrápidas de la página en teléfonos móviles desde campañas de pauta publicitaria en Meta y TikTok) y configura la regla de escape:
+   `try_files $uri $uri/ /index.html;`
+   Esto previene los típicos errores "404 Not Found" de Nginx al refrescar la página o navegar por paneles SPA.
+
+### ¿Cómo arrancarlo localmente o en el VPS por consola?
+
+1. **Construye y levanta la aplicación con Docker Compose:**
    ```bash
    docker compose up --build -d
    ```
-   *Esto compilará los activos estáticos de producción usando Node.js multi-etapa de forma limpia, y servirá los archivos estáticos en Nginx de forma súper optimizada.*
+   *Esto compilará los activos estáticos de producción usando Node.js, configurará las directivas de caché de Nginx y levantará el sitio en pocos segundos de forma aislada.*
 
-3. **Accede a la Landing Page:**
-   La aplicación estará expuesta directamente en el puerto `8080` de tu máquina o servidor:
-   *   Localmente: `http://localhost:8080`
-   *   En tu servidor VPS: `http://TU-IP-O-DOMINIO:8080`
+2. **Accede a la Landing Page:**
+   La aplicación estará expuesta directamente en el puerto standard:
+   *   Localmente: `http://localhost` (puerto `80`)
+   *   En tu servidor VPS: `http://TU-IP-O-DOMINIO`
 
-4. **Para detener los contenedores de forma segura:**
+3. **Para detener los contenedores de forma segura:**
    ```bash
    docker compose down
    ```

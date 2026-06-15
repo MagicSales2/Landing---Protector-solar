@@ -5,6 +5,7 @@ import { PRODUCT_OFFERS } from '../data';
 import { OrderOffer, Order } from '../types';
 import { getActiveAccessToken, getFirstSheetName, appendOrders } from '../lib/sheetsService';
 import { trackPixelEvent } from '../lib/tracking';
+import { saveOrderToSupabase } from '../lib/supabaseClient';
 
 
 interface CheckoutFormProps {
@@ -120,6 +121,26 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
         console.error("Error setting order state in localStorage:", err);
       }
 
+      // Try real-time Supabase sync
+      const checkAndSyncToSupabase = async () => {
+        try {
+          const success = await saveOrderToSupabase(newOrder);
+          if (success) {
+            newOrder.synced = true;
+            // Update synced status in localStorage
+            const existingOrdersStr = localStorage.getItem('colombia_sunscreen_orders');
+            if (existingOrdersStr) {
+              const existingOrders: Order[] = JSON.parse(existingOrdersStr);
+              const updatedOrders = existingOrders.map(o => o.id === newOrder.id ? { ...o, synced: true } : o);
+              localStorage.setItem('colombia_sunscreen_orders', JSON.stringify(updatedOrders));
+            }
+          }
+        } catch (dbErr) {
+          console.error('Failed to sync order to Supabase in real-time:', dbErr);
+        }
+      };
+      checkAndSyncToSupabase();
+
       // Try real-time Google Sheets sync
       const checkAndSyncToSheets = async () => {
         try {
@@ -130,7 +151,7 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
             await appendOrders(token, savedSheetId, [newOrder], sheetName);
             console.log('Real-time sync to Google Sheets succeeded!');
             
-            // Mark as synced in localStorage
+            // Mark as synced in localStorage if not already done
             newOrder.synced = true;
             const existingOrdersStr = localStorage.getItem('colombia_sunscreen_orders');
             if (existingOrdersStr) {

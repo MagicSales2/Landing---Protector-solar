@@ -13,6 +13,7 @@ import {
   setupHeaders,
   appendOrders
 } from '../lib/sheetsService';
+import { getOrdersFromSupabase, updateOrderStatusInSupabase, deleteOrderFromSupabase } from '../lib/supabaseClient';
 
 interface OrderDashboardProps {
   ordersUpdatedToggle: boolean;
@@ -67,17 +68,25 @@ export default function OrderDashboard({ ordersUpdatedToggle, onOrderDelete, isO
     return () => unsubscribe();
   }, []);
 
-  // Fetch orders from LocalStorage
-  const loadOrders = () => {
+  // Fetch orders from LocalStorage and/or Supabase
+  const loadOrders = async () => {
     try {
+      // First, fetch the local browser's storage
       const ordersStr = localStorage.getItem('colombia_sunscreen_orders');
-      if (ordersStr) {
-        setOrders(JSON.parse(ordersStr));
+      let localOrders: Order[] = ordersStr ? JSON.parse(ordersStr) : [];
+
+      // Next, see if real database orders are returned from Supabase
+      const dbOrders = await getOrdersFromSupabase();
+      if (dbOrders) {
+        // Merge them nicely: keep Supabase orders as single source of truth, 
+        // but preserve local unsynced packages if any exist.
+        const unsyncedLocal = localOrders.filter(lo => !dbOrders.some(dbo => dbo.id === lo.id));
+        setOrders([...unsyncedLocal, ...dbOrders]);
       } else {
-        setOrders([]);
+        setOrders(localOrders);
       }
     } catch (e) {
-      console.error(e);
+      console.error("Error loading merged local and cloud database orders:", e);
     }
   };
 
@@ -143,17 +152,24 @@ export default function OrderDashboard({ ordersUpdatedToggle, onOrderDelete, isO
     }
   };
 
-  const handleUpdateStatus = (id: string, newStatus: Order['status']) => {
+  const handleUpdateStatus = async (id: string, newStatus: Order['status']) => {
     const updatedOrders = orders.map(o => (o.id === id ? { ...o, status: newStatus } : o));
     setOrders(updatedOrders);
     localStorage.setItem('colombia_sunscreen_orders', JSON.stringify(updatedOrders));
+    
+    // Attempt background persistence update on cloud DB
+    await updateOrderStatusInSupabase(id, newStatus);
   };
 
-  const handleDeleteOrder = (id: string) => {
+  const handleDeleteOrder = async (id: string) => {
     if (confirm('¿Estás seguro de eliminar este pedido?')) {
       const updatedOrders = orders.filter(o => o.id !== id);
       setOrders(updatedOrders);
       localStorage.setItem('colombia_sunscreen_orders', JSON.stringify(updatedOrders));
+      
+      // Attempt deletion in cloud database
+      await deleteOrderFromSupabase(id);
+      
       onOrderDelete();
     }
   };
