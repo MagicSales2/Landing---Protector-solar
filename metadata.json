@@ -1,0 +1,6 @@
+{
+  "name": "Anthelios Landing Page",
+  "description": "High conversion landing page for Anthelios UVMune 400 Oil Control Fluide in Colombia, optimized for mobile with cash on delivery and free shipping.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
