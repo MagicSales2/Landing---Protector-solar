@@ -216,4 +216,29 @@ El script de rastreo está implementado modularmente en `/src/lib/tracking.ts` y
 
 ---
 
+## 🐳 7. Contenedores con Docker y Docker Compose (Simplificado)
+
+Para simplificar el empaquetamiento, pruebas locales y despliegue continuo en tu servidor host (VPS, Hostinger Linux con Docker, AWS, o DigitalOcean), hemos incorporado soporte premium nativo para contenedores autónomos con tu **Dockerfile** de etapas múltiples y el archivo **docker-compose.yml** integrado.
+
+### ¿Cómo arrancarlo en tu computador local o servidor de pruebas?
+
+1. **Asegúrate de tener Docker instalado junto con su plugin de compose.**
+2. **Construye y levanta la aplicación con Docker Compose:**
+   ```bash
+   docker compose up --build -d
+   ```
+   *Esto compilará los activos estáticos de producción usando Node.js multi-etapa de forma limpia, y servirá los archivos estáticos en Nginx de forma súper optimizada.*
+
+3. **Accede a la Landing Page:**
+   La aplicación estará expuesta directamente en el puerto `8080` de tu máquina o servidor:
+   *   Localmente: `http://localhost:8080`
+   *   En tu servidor VPS: `http://TU-IP-O-DOMINIO:8080`
+
+4. **Para detener los contenedores de forma segura:**
+   ```bash
+   docker compose down
+   ```
+
+---
+
 ¡Disfruta construyendo y acelerando tus conversiones con este espectacular embudo de ventas preparado para código libre! 🚀
