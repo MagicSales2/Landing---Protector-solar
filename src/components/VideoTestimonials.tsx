@@ -313,11 +313,11 @@ export default function VideoTestimonials() {
                 
                 {/* Real HTML5 Video acting as a beautiful dynamic poster cover (displays first frame natively) */}
                 <video
-                  src={review.id === "vid-1" ? "/Video 1.mp4" :
-                       review.id === "vid-3" ? "/Video 3.mp4" :
-                       review.id === "vid-4" ? "/Video 4.mp4" :
-                       review.id === "vid-5" ? "/Video 5.mp4" :
-                       "/Video 6.mp4"}
+                  src={review.id === "vid-1" ? `${import.meta.env.BASE_URL}Video 1.mp4` :
+                       review.id === "vid-3" ? `${import.meta.env.BASE_URL}Video 3.mp4` :
+                       review.id === "vid-4" ? `${import.meta.env.BASE_URL}Video 4.mp4` :
+                       review.id === "vid-5" ? `${import.meta.env.BASE_URL}Video 5.mp4` :
+                       `${import.meta.env.BASE_URL}Video 6.mp4`}
                   className="absolute inset-0 w-full h-full object-cover opacity-85 group-hover:opacity-100 transition-all duration-300"
                   preload="metadata"
                   playsInline
@@ -434,11 +434,11 @@ export default function VideoTestimonials() {
                   {activeVideo && (
                     <video
                       ref={videoRef}
-                      src={activeVideo.id === "vid-1" ? "/Video 1.mp4" :
-                           activeVideo.id === "vid-3" ? "/Video 3.mp4" :
-                           activeVideo.id === "vid-4" ? "/Video 4.mp4" :
-                           activeVideo.id === "vid-5" ? "/Video 5.mp4" :
-                           "/Video 6.mp4"}
+                      src={activeVideo.id === "vid-1" ? `${import.meta.env.BASE_URL}Video 1.mp4` :
+                           activeVideo.id === "vid-3" ? `${import.meta.env.BASE_URL}Video 3.mp4` :
+                           activeVideo.id === "vid-4" ? `${import.meta.env.BASE_URL}Video 4.mp4` :
+                           activeVideo.id === "vid-5" ? `${import.meta.env.BASE_URL}Video 5.mp4` :
+                           `${import.meta.env.BASE_URL}Video 6.mp4`}
                       className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${videoError ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
                       playsInline
                       loop
