@@ -3,10 +3,8 @@ import { CreditCard, Truck, Check, AlertCircle, ShoppingCart } from 'lucide-reac
 import { COLOMBIA_REGIONS, Department } from '../lib/colombiaData';
 import { PRODUCT_OFFERS } from '../data';
 import { OrderOffer, Order } from '../types';
-import { getActiveAccessToken, getFirstSheetName, appendOrders } from '../lib/sheetsService';
+import { saveOrderToSupabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { trackPixelEvent } from '../lib/tracking';
-import { saveOrderToSupabase } from '../lib/supabaseClient';
-
 
 interface CheckoutFormProps {
   selectedOfferId: string;
@@ -15,7 +13,6 @@ interface CheckoutFormProps {
 }
 
 export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSuccess }: CheckoutFormProps) {
-  // Form values
   const [formData, setFormData] = useState({
     clientName: '',
     clientPhone: '',
@@ -33,11 +30,10 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [phoneError, setPhoneError] = useState('');
   const [successOrder, setSuccessOrder] = useState<Order | null>(null);
+  const [submitError, setSubmitError] = useState('');
 
-  // Get active offer details
   const activeOffer = PRODUCT_OFFERS.find(o => o.id === selectedOfferId) || PRODUCT_OFFERS[1];
 
-  // Update cities when department changes
   useEffect(() => {
     if (formData.department) {
       const selectedDep = COLOMBIA_REGIONS.find(d => d.name === formData.department);
@@ -51,12 +47,10 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
     }
   }, [formData.department]);
 
-  // Phone number validator (Colombia standard: 10 digits starting with 3)
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value.replace(/\D/g, ''); // strict digits
+    const val = e.target.value.replace(/\D/g, '');
     if (val.length <= 10) {
       setFormData(prev => ({ ...prev, clientPhone: val }));
-      
       if (val.length > 0 && val.length < 10) {
         setPhoneError('El número celular debe tener 10 dígitos (Ej: 300 123 4567)');
       } else if (val.length === 10 && !val.startsWith('3')) {
@@ -72,10 +66,10 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Strict validations
+    setSubmitError('');
+
     if (formData.clientPhone.length !== 10 || !formData.clientPhone.startsWith('3')) {
       setPhoneError('Por favor ingresa un número celular de 10 dígitos válido que inicie con 3.');
       return;
@@ -88,99 +82,62 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
 
     setIsSubmitting(true);
 
-    // Simulate order placement
-    setTimeout(() => {
-      const newOrder: Order = {
-        id: `${paymentMethod === 'contraentrega' ? 'KOMMO' : 'MP'}-${Math.floor(100000 + Math.random() * 90000).toString()}`,
-        clientName: formData.clientName,
-        clientPhone: formData.clientPhone,
-        clientEmail: formData.clientEmail.trim(),
-        documentId: formData.documentId.trim(),
-        department: formData.department,
-        city: formData.city,
-        address: formData.address,
-        address2: formData.address2.trim(),
-        notes: formData.notes.trim(),
-        offerId: activeOffer.id,
-        offerName: activeOffer.name,
-        totalPrice: activeOffer.price,
-        quantity: activeOffer.quantity,
-        status: 'new',
-        date: new Date().toISOString(),
-        synced: false,
-        paymentMethod: paymentMethod === 'contraentrega' ? 'Contra Entrega' : 'Mercado Pago'
-      };
+    const orderId = `${paymentMethod === 'contraentrega' ? 'KOMMO' : 'MP'}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
-      // Save to localStorage
-      try {
-        const existingOrdersStr = localStorage.getItem('colombia_sunscreen_orders');
-        const existingOrders: Order[] = existingOrdersStr ? JSON.parse(existingOrdersStr) : [];
-        existingOrders.unshift(newOrder);
-        localStorage.setItem('colombia_sunscreen_orders', JSON.stringify(existingOrders));
-      } catch (err) {
-        console.error("Error setting order state in localStorage:", err);
-      }
+    const newOrder: Order = {
+      id: orderId,
+      clientName: formData.clientName,
+      clientPhone: formData.clientPhone,
+      clientEmail: formData.clientEmail.trim(),
+      documentId: formData.documentId.trim(),
+      department: formData.department,
+      city: formData.city,
+      address: formData.address,
+      address2: formData.address2.trim(),
+      notes: formData.notes.trim(),
+      offerId: activeOffer.id,
+      offerName: activeOffer.name,
+      totalPrice: activeOffer.price,
+      quantity: activeOffer.quantity,
+      status: 'new',
+      date: new Date().toISOString(),
+      synced: false,
+      paymentMethod: paymentMethod === 'contraentrega' ? 'Contra Entrega' : 'Mercado Pago'
+    };
 
-      // Try real-time Supabase sync
-      const checkAndSyncToSupabase = async () => {
-        try {
-          const success = await saveOrderToSupabase(newOrder);
-          if (success) {
-            newOrder.synced = true;
-            // Update synced status in localStorage
-            const existingOrdersStr = localStorage.getItem('colombia_sunscreen_orders');
-            if (existingOrdersStr) {
-              const existingOrders: Order[] = JSON.parse(existingOrdersStr);
-              const updatedOrders = existingOrders.map(o => o.id === newOrder.id ? { ...o, synced: true } : o);
-              localStorage.setItem('colombia_sunscreen_orders', JSON.stringify(updatedOrders));
-            }
-          }
-        } catch (dbErr) {
-          console.error('Failed to sync order to Supabase in real-time:', dbErr);
-        }
-      };
-      checkAndSyncToSupabase();
+    // Save to Supabase (primary)
+    const saved = await saveOrderToSupabase(newOrder);
+    if (saved) {
+      newOrder.synced = true;
+      console.log('Pedido guardado en Supabase exitosamente');
+    }
 
-      // Try real-time Google Sheets sync
-      const checkAndSyncToSheets = async () => {
-        try {
-          const savedSheetId = localStorage.getItem('colombia_sunscreen_spreadsheet_id');
-          const token = getActiveAccessToken();
-          if (savedSheetId && token) {
-            const sheetName = await getFirstSheetName(token, savedSheetId);
-            await appendOrders(token, savedSheetId, [newOrder], sheetName);
-            console.log('Real-time sync to Google Sheets succeeded!');
-            
-            // Mark as synced in localStorage if not already done
-            newOrder.synced = true;
-            const existingOrdersStr = localStorage.getItem('colombia_sunscreen_orders');
-            if (existingOrdersStr) {
-              const existingOrders: Order[] = JSON.parse(existingOrdersStr);
-              const updatedOrders = existingOrders.map(o => o.id === newOrder.id ? { ...o, synced: true } : o);
-              localStorage.setItem('colombia_sunscreen_orders', JSON.stringify(updatedOrders));
-            }
-          }
-        } catch (sheetsErr) {
-          console.error('Failed to sync order to Google Sheets in real-time:', sheetsErr);
-        }
-      };
-      checkAndSyncToSheets();
+    // Fallback: localStorage
+    try {
+      const existingOrders = JSON.parse(localStorage.getItem('colombia_sunscreen_orders') || '[]');
+      existingOrders.unshift(newOrder);
+      localStorage.setItem('colombia_sunscreen_orders', JSON.stringify(existingOrders));
+    } catch (err) {
+      console.error('Error saving to localStorage:', err);
+    }
 
-      setSuccessOrder(newOrder);
-      setIsSubmitting(false);
-      onOrderSuccess(newOrder);
+    if (!saved && !isSupabaseConfigured()) {
+      setSubmitError('Supabase no está configurado. El pedido se guardó localmente.');
+    } else if (!saved) {
+      setSubmitError('Error al guardar en la base de datos. El pedido se guardó localmente.');
+    }
 
-      // Track order conversion (Meta / TikTok Pixels)
-      trackPixelEvent('Purchase', {
-        value: newOrder.totalPrice,
-        currency: 'COP',
-        content_name: newOrder.offerName,
-        num_items: newOrder.quantity
-      });
+    trackPixelEvent('Purchase', {
+      value: newOrder.totalPrice,
+      currency: 'COP',
+      content_name: newOrder.offerName,
+      num_items: newOrder.quantity
+    });
 
-      // Trigger a light window scroll for mobile
-      window.scrollTo({ top: 120, behavior: 'smooth' });
-    }, 1200);
+    setSuccessOrder(newOrder);
+    setIsSubmitting(false);
+    onOrderSuccess(newOrder);
+    window.scrollTo({ top: 120, behavior: 'smooth' });
   };
 
   const formatPrice = (p: number) => {
@@ -194,6 +151,7 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
 
   const resetOrderForm = () => {
     setSuccessOrder(null);
+    setSubmitError('');
     setFormData({
       clientName: '',
       clientPhone: '',
@@ -207,7 +165,6 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
     });
   };
 
-  // Pre-select first department on mount
   useEffect(() => {
     if (!formData.department && COLOMBIA_REGIONS.length > 0) {
       setFormData(prev => ({ ...prev, department: COLOMBIA_REGIONS[0].name }));
@@ -217,16 +174,15 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
   return (
     <div id="formulario-pedido" className="scroll-mt-20">
       {successOrder ? (
-        // Beautiful success conversion screen
         <div className="bg-white border-2 border-emerald-500 rounded-3xl p-6 text-center max-w-lg mx-auto shadow-xl animate-fadeIn text-slate-800">
           <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <Check className="w-8 h-8 text-emerald-600 stroke-[3]" />
           </div>
-          
+
           <span className="text-emerald-700 bg-emerald-50 text-[10px] font-black px-3.5 py-1.5 rounded-full border border-emerald-100 tracking-wider">
             {successOrder.id.startsWith('KOMMO') ? 'RESERVA REGISTRADA CON ÉXITO 🚚' : 'RESERVA REGISTRADA CON ÉXITO 💳'}
           </span>
-          
+
           <h3 className="text-2xl font-black text-slate-800 mt-4 mb-1">
             ¡Muchas gracias, {successOrder.clientName.split(' ')[0]}!
           </h3>
@@ -234,11 +190,17 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
             Código de Reserva: <span className="font-mono font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border">{successOrder.id}</span>
           </p>
 
+          {submitError && (
+            <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium px-4 py-2 rounded-xl mb-4">
+              {submitError}
+            </div>
+          )}
+
           <div className="bg-slate-50 rounded-2xl p-4 text-left border border-slate-100 mb-6">
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Detalles del Envío Provisionales</h4>
+            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Detalles del Envío</h4>
             <div className="space-y-1.5 text-xs md:text-sm text-slate-700">
               <p><strong>Producto:</strong> {successOrder.offerName} ({formatPrice(successOrder.totalPrice)})</p>
-              <p><strong>Cédula / Documento:</strong> {successOrder.documentId}</p>
+              <p><strong>Documento:</strong> {successOrder.documentId}</p>
               <p><strong>Celular:</strong> {successOrder.clientPhone}</p>
               <p><strong>Destino:</strong> {successOrder.city}, {successOrder.department}</p>
               <p><strong>Dirección:</strong> {successOrder.address}</p>
@@ -247,26 +209,25 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
             </div>
           </div>
 
-          {/* DUAL REDIRECT SECTION based on paymentMethod state */}
           {successOrder.id.startsWith('KOMMO') ? (
             <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4.5 text-center my-6">
               <span className="text-[9px] tracking-wider uppercase font-black text-white bg-orange-600 px-3 py-1 rounded">PASO EXCLUSIVO REQUERIDO 🇨🇴</span>
               <h4 className="text-sm font-black text-slate-900 mt-3 mb-1">¡Completa tu Envío Contra Entrega!</h4>
-              <p className="text-xs text-slate-650 max-w-sm mx-auto mb-4 leading-relaxed">
+              <p className="text-xs text-slate-600 max-w-sm mx-auto mb-4 leading-relaxed">
                 Para que tus datos de entrega ingresen a nuestro sistema <strong>Kommo CRM</strong> y el mensajero sea asignado hoy mismo, haz clic en el botón oficial de abajo para confirmar tu despacho:
               </p>
               <a
                 href={activeOffer.kommoUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 bg-orange-650 hover:bg-orange-700 text-white font-black py-4 px-6 rounded-xl transition-all shadow-md text-sm md:text-base animate-pulse w-full max-w-xs cursor-pointer"
+                className="inline-flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-700 text-white font-black py-4 px-6 rounded-xl transition-all shadow-md text-sm md:text-base animate-pulse w-full max-w-xs cursor-pointer"
                 id="success-kommo-redirect"
               >
                 IR AL FORMULARIO COMPLETO 🚀
               </a>
               {activeOffer.quantity === 3 && (
                 <p className="text-[9.5px] text-slate-500 mt-2.5 max-w-xs mx-auto leading-tight">
-                  *Nota: Se usará el formulario de 2 unidades, pero no te preocupes, en este podrás confirmar manualmente que deseas la promoción familiar de 3 unidades.
+                  *Nota: Se usará el formulario de 2 unidades, pero podrás confirmar manualmente que deseas la promoción familiar de 3 unidades.
                 </p>
               )}
             </div>
@@ -274,7 +235,7 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
             <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4.5 text-center my-6">
               <span className="text-[9px] tracking-wider uppercase font-black text-white bg-blue-600 px-3 py-1 rounded">PAGO INMEDIATO SEGURO 💳</span>
               <h4 className="text-sm font-black text-slate-900 mt-3 mb-1">Paga con Mercado Pago</h4>
-              <p className="text-xs text-slate-650 max-w-sm mx-auto mb-4 leading-relaxed">
+              <p className="text-xs text-slate-600 max-w-sm mx-auto mb-4 leading-relaxed">
                 Completa tu pago seguro con PSE, Tarjeta de Crédito, Débito o Efecty vía Mercado Pago haciendo clic en el botón oficial de pago de la promoción:
               </p>
               <a
@@ -298,7 +259,7 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
               </div>
               <div className="flex items-center gap-3 text-left">
                 <div className="w-6 h-6 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0 text-orange-600 font-bold text-xs">2</div>
-                <p className="text-xs text-slate-600 font-medium font-sans">Despachamos de forma inmediata a tu dirección en Colombia sin costo.</p>
+                <p className="text-xs text-slate-600 font-medium">Despachamos de forma inmediata a tu dirección en Colombia sin costo.</p>
               </div>
             </div>
           </div>
@@ -317,10 +278,9 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
         <form onSubmit={handleSubmit} className="bg-slate-900 text-white rounded-3xl p-6 shadow-xl border border-slate-800">
           <div className="flex items-center gap-2 mb-6">
             <ShoppingCart className="w-5 h-5 text-orange-500" />
-            <h3 className="text-lg md:text-xl font-bold tracking-tight">Formulario de Pedido Especial</h3>
+            <h3 className="text-lg md:text-xl font-bold tracking-tight">Formulario de Pedido</h3>
           </div>
 
-          {/* Offer Selection Panel */}
           <div className="mb-6 space-y-2.5">
             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">1. Selecciona tu Promoción</label>
             <div className="grid grid-cols-1 gap-2">
@@ -366,10 +326,9 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
             </div>
           </div>
 
-          {/* Personal Data Panel */}
           <div className="space-y-4">
             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">2. Datos de Envío y Contacto</label>
-            
+
             <div>
               <label className="block text-xs font-bold text-slate-300 mb-1">Nombre Completo <span className="text-orange-500">*</span></label>
               <input
@@ -406,7 +365,7 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-355 mb-1">Correo Electrónico <span className="text-orange-500">*</span></label>
+              <label className="block text-xs font-bold text-slate-300 mb-1">Correo Electrónico <span className="text-orange-500">*</span></label>
               <input
                 required
                 type="email"
@@ -504,11 +463,9 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
             </div>
           </div>
 
-          {/* 3. Elige tu Método de Pago Selector */}
           <div className="mt-6 mb-6">
             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">3. Elige tu Método de Pago</label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {/* Contra Entrega */}
               <button
                 type="button"
                 onClick={() => setPaymentMethod('contraentrega')}
@@ -521,7 +478,7 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
               >
                 <div className="flex items-center gap-2.5">
                   <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                    paymentMethod === 'contraentrega' ? 'border-orange-500 text-orange-505' : 'border-slate-600'
+                    paymentMethod === 'contraentrega' ? 'border-orange-500' : 'border-slate-600'
                   }`}>
                     {paymentMethod === 'contraentrega' && <div className="w-2 h-2 rounded-full bg-orange-500" />}
                   </div>
@@ -532,7 +489,6 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
                 </p>
               </button>
 
-              {/* Mercado Pago */}
               <button
                 type="button"
                 onClick={() => setPaymentMethod('mercadopago')}
@@ -545,7 +501,7 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
               >
                 <div className="flex items-center gap-2.5">
                   <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                    paymentMethod === 'mercadopago' ? 'border-orange-500 text-orange-505' : 'border-slate-600'
+                    paymentMethod === 'mercadopago' ? 'border-orange-500' : 'border-slate-600'
                   }`}>
                     {paymentMethod === 'mercadopago' && <div className="w-2 h-2 rounded-full bg-orange-500" />}
                   </div>
@@ -558,7 +514,6 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
             </div>
           </div>
 
-          {/* Pricing Calculator Box */}
           <div className="mt-8 bg-slate-950 rounded-2xl p-4 border border-slate-800 space-y-2">
             <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Resumen Financiero</h4>
             <div className="flex justify-between text-xs md:text-sm">
@@ -581,7 +536,6 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
             </div>
           </div>
 
-          {/* Main submit button with animated hover and micro indicators */}
           <button
             type="submit"
             disabled={isSubmitting}
@@ -591,7 +545,7 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
             {isSubmitting ? (
               <div className="flex items-center justify-center gap-2">
                 <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                <span>PROCESANDO TU PEDIDO CO...</span>
+                <span>GUARDANDO TU PEDIDO...</span>
               </div>
             ) : (
               <div className="flex items-center justify-center gap-2">
@@ -599,7 +553,7 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
               </div>
             )}
           </button>
-          
+
           <p className="text-[10px] text-slate-500 text-center mt-3 font-medium">
             *Despachos rápidos con cobertura de entrega nacional gratis y pago seguro contra entrega en casa.
           </p>

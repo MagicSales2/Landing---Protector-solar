@@ -295,8 +295,8 @@ export default function AdvisorBot() {
                     )}
                     <div className={`max-w-[78%] rounded-2xl px-3.5 py-2.5 text-xs font-medium leading-relaxed ${
                       msg.sender === 'user'
-                        ? 'bg-slate-850 text-white rounded-br-none shadow-3xs'
-                        : 'bg-white text-slate-750 border border-slate-200/60 rounded-bl-none shadow-3xs'
+                        ? 'bg-slate-800 text-white rounded-br-none shadow-2xs'
+                        : 'bg-white text-slate-700 border border-slate-200/60 rounded-bl-none shadow-2xs'
                     }`}>
                       {cleanMarkdown(msg.text)}
                     </div>
@@ -309,7 +309,7 @@ export default function AdvisorBot() {
                         <button
                           key={oIdx}
                           onClick={() => handleSendMessage(opt)}
-                          className="bg-orange-50 hover:bg-orange-100 text-orange-700 font-bold text-[10px] px-2.5 py-1.5 rounded-lg border border-orange-100 transition-colors duration-150 cursor-pointer shadow-3xs hover:-translate-y-0.5"
+                          className="bg-orange-50 hover:bg-orange-100 text-orange-700 font-bold text-[10px] px-2.5 py-1.5 rounded-lg border border-orange-100 transition-colors duration-150 cursor-pointer shadow-2xs hover:-translate-y-0.5"
                         >
                           {opt}
                         </button>
@@ -325,7 +325,7 @@ export default function AdvisorBot() {
                   <div className="w-6.5 h-6.5 rounded-full bg-slate-200 border text-slate-700 flex items-center justify-center font-bold text-[10px] flex-shrink-0 mt-0.5">
                     D
                   </div>
-                  <div className="bg-white border rounded-2xl px-4 py-3 text-xs w-18 flex items-center justify-center gap-1 shadow-3xs">
+                  <div className="bg-white border rounded-2xl px-4 py-3 text-xs w-18 flex items-center justify-center gap-1 shadow-2xs">
                     <span className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
                     <span className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
                     <span className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-bounce" />
@@ -338,7 +338,7 @@ export default function AdvisorBot() {
 
             {/* Warning disclosure about virtual answers */}
             <div className="bg-slate-50 px-4 py-1.5 border-t border-slate-100 flex items-center gap-1.5 text-[9px] text-slate-400 font-semibold uppercase tracking-wider">
-              <AlertCircle className="w-3.5 h-3.5 text-slate-350" />
+              <AlertCircle className="w-3.5 h-3.5 text-slate-400" />
               <span>Soporte automatizado oficial Dermagia</span>
             </div>
 

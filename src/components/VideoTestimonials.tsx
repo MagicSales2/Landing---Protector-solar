@@ -387,7 +387,7 @@ export default function VideoTestimonials() {
                 </div>
 
                 <div className="mt-3.5 pt-3 border-t border-slate-900 flex items-center justify-between">
-                  <span className="text-[9px] bg-slate-900 border border-slate-800 text-slate-350 font-bold px-2.5 py-1 rounded-md uppercase tracking-wider">
+                  <span className="text-[9px] bg-slate-900 border border-slate-800 text-slate-400 font-bold px-2.5 py-1 rounded-md uppercase tracking-wider">
                     👉 {review.skinType}
                   </span>
                 </div>
