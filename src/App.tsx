@@ -412,14 +412,16 @@ export default function App() {
                 Plan Diario
               </span>
               <div className="space-y-4">
-                <div>
+                <div className="text-center">
                   <h3 className="font-extrabold text-slate-900 text-lg uppercase">{PRODUCT_OFFERS[0].name}</h3>
                   <p className="text-xs text-slate-400 mt-1">{PRODUCT_OFFERS[0].subtitle}</p>
                 </div>
 
-                <div className="py-4 border-y border-slate-100">
-                  <span className="text-2xl font-black text-slate-900">{formatPrice(PRODUCT_OFFERS[0].price)}</span>
-                  <span className="text-[11px] text-slate-400 font-bold block mt-1">Precio Unitario Normal</span>
+                <div className="py-4 border-y border-slate-100 flex flex-col items-center justify-center text-center gap-1.5">
+                  <div>
+                    <span className="text-2xl font-black text-slate-900">{formatPrice(PRODUCT_OFFERS[0].price)}</span>
+                    <span className="text-[11px] text-slate-400 font-bold block mt-1">Precio Unitario Normal</span>
+                  </div>
                 </div>
 
                 <ul className="space-y-2 text-xs text-slate-600">
@@ -518,14 +520,16 @@ export default function App() {
                 Ahorro Familiar
               </span>
               <div className="space-y-4">
-                <div>
+                <div className="text-center">
                   <h3 className="font-extrabold text-slate-900 text-lg uppercase">{PRODUCT_OFFERS[2].name}</h3>
                   <p className="text-xs text-slate-400 mt-1">{PRODUCT_OFFERS[2].subtitle}</p>
                 </div>
 
-                <div className="py-4 border-y border-slate-100">
-                  <span className="text-2xl font-black text-slate-900">{formatPrice(PRODUCT_OFFERS[2].price)}</span>
-                  <span className="text-[11px] text-slate-400 font-bold block mt-1">Ahorras {formatPrice(PRODUCT_OFFERS[2].savings || 0)} (18%)</span>
+                <div className="py-4 border-y border-slate-100 flex flex-col items-center justify-center text-center gap-1.5">
+                  <div>
+                    <span className="text-2xl font-black text-slate-900">{formatPrice(PRODUCT_OFFERS[2].price)}</span>
+                    <span className="text-[11px] text-slate-400 font-bold block mt-1">Ahorras {formatPrice(PRODUCT_OFFERS[2].savings || 0)} (18%)</span>
+                  </div>
                 </div>
 
                 <ul className="space-y-2 text-xs text-slate-600">
