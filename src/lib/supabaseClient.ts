@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 import { createClient, SupabaseClient, AuthSession } from '@supabase/supabase-js';
-import { Order } from '../types';
+import { Order, OrderOffer } from '../types';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -8,7 +8,7 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 let supabase: SupabaseClient | null = null;
 let currentSession: AuthSession | null = null;
 
-// Initialize only if credentials exist
+// El cliente solo se crea si hay credenciales configuradas en el build.
 if (supabaseUrl && supabaseAnonKey) {
   supabase = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
@@ -45,35 +45,110 @@ export async function restoreSession() {
   currentSession = data.session;
 }
 
-// ─── Orders CRUD ──────────────────────────────────────
+// ─── Pedidos ──────────────────────────────────────────
+// Los pedidos los crea la función del servidor (no el navegador), que valida
+// los datos, calcula el precio real y lo manda a Kommo.
 
-export async function saveOrderToSupabase(order: Order): Promise<boolean> {
-  if (!supabase) return false;
-  const { error } = await supabase.from('pedidos').insert([{
-    id: order.id,
-    client_name: order.clientName,
-    client_phone: order.clientPhone,
-    client_email: order.clientEmail || '',
-    document_id: order.documentId || '',
-    department: order.department,
-    city: order.city,
-    address: order.address,
-    address2: order.address2 || '',
-    notes: order.notes,
-    offer_id: order.offerId,
-    offer_name: order.offerName,
-    total_price: order.totalPrice,
-    quantity: order.quantity,
-    status: order.status,
-    payment_method: order.paymentMethod || 'Contra Entrega',
-    created_at: order.date,
-  }]);
-  if (error) {
-    console.error('Error guardando pedido en Supabase:', error.message);
-    return false;
+export type NuevoPedido = {
+  clientName: string;
+  clientPhone: string;
+  clientEmail: string;
+  documentId: string;
+  department: string;
+  city: string;
+  address: string;
+  address2?: string;
+  notes?: string;
+  offerId: string;
+  paymentMethod: 'Contra Entrega' | 'Mercado Pago';
+  website?: string; // trampa para robots
+};
+
+export type PedidoCreado = {
+  ok: boolean;
+  orderId: string;
+  numero?: number;
+  total?: number;
+};
+
+export async function createOrder(datos: NuevoPedido): Promise<PedidoCreado> {
+  if (!supabase) {
+    throw new Error('La página todavía no tiene configurado el servidor de pedidos.');
   }
-  return true;
+
+  const { data, error } = await supabase.functions.invoke<PedidoCreado>('crear-pedido', {
+    body: {
+      ...datos,
+      utm: leerUtm(),
+      referrer: document.referrer || undefined,
+      userAgent: navigator.userAgent,
+    },
+  });
+
+  if (error) {
+    // El mensaje exacto lo pone la función del servidor (ej: "Datos incompletos")
+    let mensaje = 'No pudimos registrar tu pedido. Intenta de nuevo.';
+    try {
+      const cuerpo = await (error as { context?: Response }).context?.json();
+      if (cuerpo?.error) mensaje = cuerpo.error;
+    } catch {
+      /* se queda el mensaje genérico */
+    }
+    throw new Error(mensaje);
+  }
+
+  if (!data) throw new Error('No pudimos registrar tu pedido. Intenta de nuevo.');
+  return data;
 }
+
+// De qué anuncio/clic llegó el cliente (para saber qué publicidad vende)
+export function leerUtm(): Record<string, string> {
+  const params = new URLSearchParams(window.location.search);
+  const utm: Record<string, string> = {};
+  for (const clave of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'gclid', 'fbclid']) {
+    const valor = params.get(clave);
+    if (valor) utm[clave] = valor.slice(0, 200);
+  }
+  return utm;
+}
+
+// ─── Catálogo de ofertas (precios) ────────────────────
+
+export async function getOfertas(): Promise<OrderOffer[] | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from('ofertas')
+    .select('id, nombre, cantidad, precio, mercadopago_url, activo')
+    .eq('activo', true)
+    .order('cantidad', { ascending: true });
+  if (error || !data || data.length === 0) return null;
+
+  // Precio de una unidad = referencia para calcular el ahorro de cada promoción.
+  const precioUnitario = Number(data[0].precio);
+  const money = (n: number) =>
+    new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n);
+
+  return data.map((o, i) => {
+    const cantidad = Number(o.cantidad);
+    const precio = Number(o.precio);
+    const ahorro = Math.max(precioUnitario * cantidad - precio, 0);
+    const porcentaje = ahorro > 0 ? Math.round((ahorro / (precioUnitario * cantidad)) * 100) : 0;
+
+    return {
+      id: o.id,
+      name: o.nombre,
+      subtitle: ahorro > 0 ? `¡Ahorras ${money(ahorro)} (${porcentaje}% Descuento)!` : '',
+      price: precio,
+      savings: ahorro,
+      // La segunda oferta (2 unidades) es la recomendada, como en el diseño original.
+      isPopular: i === 1,
+      quantity: cantidad,
+      mercadopagoUrl: o.mercadopago_url || '',
+    };
+  });
+}
+
+// ─── Lectura y gestión de pedidos (solo administradores) ───
 
 export async function getOrdersFromSupabase(): Promise<Order[] | null> {
   if (!supabase) return null;
@@ -82,7 +157,7 @@ export async function getOrdersFromSupabase(): Promise<Order[] | null> {
     .select('*')
     .order('created_at', { ascending: false });
   if (error) {
-    console.error('Error fetching orders from Supabase:', error.message);
+    console.error('Error leyendo pedidos:', error.message);
     return null;
   }
   return (data || []).map(mapRowToOrder);
@@ -92,7 +167,7 @@ export async function updateOrderStatusInSupabase(orderId: string, status: strin
   if (!supabase) return false;
   const { error } = await supabase.from('pedidos').update({ status }).eq('id', orderId);
   if (error) {
-    console.error('Error actualizando estado en Supabase:', error.message);
+    console.error('Error actualizando estado:', error.message);
     return false;
   }
   return true;
@@ -102,7 +177,7 @@ export async function deleteOrderFromSupabase(orderId: string): Promise<boolean>
   if (!supabase) return false;
   const { error } = await supabase.from('pedidos').delete().eq('id', orderId);
   if (error) {
-    console.error('Error eliminando pedido de Supabase:', error.message);
+    console.error('Error eliminando pedido:', error.message);
     return false;
   }
   return true;
@@ -128,7 +203,7 @@ function mapRowToOrder(row: any): Order {
     quantity: Number(row.quantity),
     status: row.status,
     date: row.created_at,
-    synced: true,
+    synced: row.kommo_estado === 'enviado' || row.kommo_estado === 'enviado_con_aviso',
     paymentMethod: row.payment_method,
   };
 }

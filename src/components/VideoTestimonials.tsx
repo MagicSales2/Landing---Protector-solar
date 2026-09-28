@@ -116,6 +116,23 @@ const COLOMBIAN_VIDEO_REVIEWS: VideoReview[] = [
   }
 ];
 
+// Un solo lugar donde se decide qué archivo es cada video, y su imagen de
+// portada. La portada pesa ~50 KB contra ~1.7 MB del video: la página no
+// descarga video hasta que la persona decide verlo.
+const ARCHIVOS_VIDEO: Record<string, string> = {
+  'vid-1': 'Video 1.mp4',
+  'vid-3': 'Video 3.mp4',
+  'vid-4': 'Video 4.mp4',
+  'vid-5': 'Video 5.mp4',
+  'vid-6': 'Video 6.mp4',
+};
+
+const rutaVideo = (id: string) =>
+  `${import.meta.env.BASE_URL}${ARCHIVOS_VIDEO[id] ?? ARCHIVOS_VIDEO['vid-6']}`;
+
+const rutaPoster = (id: string) =>
+  `${import.meta.env.BASE_URL}${(ARCHIVOS_VIDEO[id] ?? ARCHIVOS_VIDEO['vid-6']).replace('.mp4', '.jpg')}`;
+
 export default function VideoTestimonials() {
   const [activeVideo, setActiveVideo] = useState<VideoReview | null>(null);
   const [likes, setLikes] = useState<Record<string, number>>({
@@ -313,13 +330,10 @@ export default function VideoTestimonials() {
                 
                 {/* Real HTML5 Video acting as a beautiful dynamic poster cover (displays first frame natively) */}
                 <video
-                  src={review.id === "vid-1" ? `${import.meta.env.BASE_URL}Video 1.mp4` :
-                       review.id === "vid-3" ? `${import.meta.env.BASE_URL}Video 3.mp4` :
-                       review.id === "vid-4" ? `${import.meta.env.BASE_URL}Video 4.mp4` :
-                       review.id === "vid-5" ? `${import.meta.env.BASE_URL}Video 5.mp4` :
-                       `${import.meta.env.BASE_URL}Video 6.mp4`}
+                  src={rutaVideo(review.id)}
+                  poster={rutaPoster(review.id)}
                   className="absolute inset-0 w-full h-full object-cover opacity-85 group-hover:opacity-100 transition-all duration-300"
-                  preload="metadata"
+                  preload="none"
                   playsInline
                   muted
                   loop
@@ -434,11 +448,9 @@ export default function VideoTestimonials() {
                   {activeVideo && (
                     <video
                       ref={videoRef}
-                      src={activeVideo.id === "vid-1" ? `${import.meta.env.BASE_URL}Video 1.mp4` :
-                           activeVideo.id === "vid-3" ? `${import.meta.env.BASE_URL}Video 3.mp4` :
-                           activeVideo.id === "vid-4" ? `${import.meta.env.BASE_URL}Video 4.mp4` :
-                           activeVideo.id === "vid-5" ? `${import.meta.env.BASE_URL}Video 5.mp4` :
-                           `${import.meta.env.BASE_URL}Video 6.mp4`}
+                      src={rutaVideo(activeVideo.id)}
+                      poster={rutaPoster(activeVideo.id)}
+                      preload="auto"
                       className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${videoError ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
                       playsInline
                       loop

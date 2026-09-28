@@ -62,6 +62,11 @@ export function initTracking() {
 /**
  * Tracks a custom event to loaded Pixels.
  * Safe from ad-blockers or non-initialized pixels.
+ *
+ * IMPORTANTE (Meta/TikTok): el evento "Purchase" solo debe dispararse cuando el
+ * pago esté CONFIRMADO (idealmente desde el servidor al recibir el webhook de
+ * Mercado Pago). Si se manda antes de cobrar, Meta puede marcar la cuenta como
+ * suspecta de ventas ficticias. Para capturas de formularios usa "Lead".
  */
 export function trackPixelEvent(eventName: string, data?: { value?: number; currency?: string; [key: string]: any }) {
   if (typeof window === 'undefined') return;

@@ -45,7 +45,6 @@ export interface OrderOffer {
   savings?: number;
   isPopular?: boolean;
   quantity: number;
-  kommoUrl?: string;
   mercadopagoUrl?: string;
 }
 

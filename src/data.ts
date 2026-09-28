@@ -88,7 +88,6 @@ export const PRODUCT_OFFERS: OrderOffer[] = [
     price: 84900,
     isPopular: false,
     quantity: 1,
-    kommoUrl: "https://forms.kommo.com/rzrtvdm?dp=Q1zaSQHqO-hHArUG1UMtpTB99ewkmLXe7CtTXZiiPstN5gK954kVaLLFp702YZI6&track=0",
     mercadopagoUrl: "https://link.mercadopago.com.co/anthelios1un"
   },
   {
@@ -99,7 +98,6 @@ export const PRODUCT_OFFERS: OrderOffer[] = [
     savings: 19900,
     isPopular: true,
     quantity: 2,
-    kommoUrl: "https://forms.kommo.com/rzrtvcl?dp=Q1zaSQHqO-hHArUG1UMtpTB99ewkmLXe7CtTXZiiPsvDVyzxH4WAFIVWpYR7xH2h&track=0",
     mercadopagoUrl: "https://link.mercadopago.com.co/anthelios2un"
   },
   {
@@ -110,7 +108,6 @@ export const PRODUCT_OFFERS: OrderOffer[] = [
     savings: 44800,
     isPopular: false,
     quantity: 3,
-    kommoUrl: "https://forms.kommo.com/rzrtvcl?dp=Q1zaSQHqO-hHArUG1UMtpTB99ewkmLXe7CtTXZiiPsvDVyzxH4WAFIVWpYR7xH2h&track=0",
     mercadopagoUrl: "https://link.mercadopago.com.co/anthelios3un"
   }
 ];

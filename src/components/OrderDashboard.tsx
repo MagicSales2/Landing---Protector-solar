@@ -40,13 +40,7 @@ export default function OrderDashboard({ ordersUpdatedToggle, onOrderDelete, isO
   // Fetch orders
   const loadOrders = async () => {
     const dbOrders = await getOrdersFromSupabase();
-    if (dbOrders) {
-      setOrders(dbOrders);
-    } else {
-      // Fallback: load from localStorage
-      const local = JSON.parse(localStorage.getItem('colombia_sunscreen_orders') || '[]');
-      setOrders(local);
-    }
+    setOrders(dbOrders ?? []);
   };
 
   useEffect(() => {
@@ -78,20 +72,12 @@ export default function OrderDashboard({ ordersUpdatedToggle, onOrderDelete, isO
   const handleUpdateStatus = async (id: string, newStatus: Order['status']) => {
     setOrders(prev => prev.map(o => o.id === id ? { ...o, status: newStatus } : o));
     await updateOrderStatusInSupabase(id, newStatus);
-
-    // Also update localStorage fallback
-    const local = JSON.parse(localStorage.getItem('colombia_sunscreen_orders') || '[]');
-    const updated = local.map((o: Order) => o.id === id ? { ...o, status: newStatus } : o);
-    localStorage.setItem('colombia_sunscreen_orders', JSON.stringify(updated));
   };
 
   const handleDeleteOrder = async (id: string) => {
     if (!confirm('¿Estás seguro de eliminar este pedido?')) return;
     setOrders(prev => prev.filter(o => o.id !== id));
     await deleteOrderFromSupabase(id);
-
-    const local = JSON.parse(localStorage.getItem('colombia_sunscreen_orders') || '[]');
-    localStorage.setItem('colombia_sunscreen_orders', JSON.stringify(local.filter((o: Order) => o.id !== id)));
     onOrderDelete();
   };
 
@@ -133,8 +119,8 @@ export default function OrderDashboard({ ordersUpdatedToggle, onOrderDelete, isO
           <h3 className="text-xl font-black text-slate-900">Panel de Pedidos</h3>
           <p className="text-xs text-slate-500 mt-1 max-w-md">
             {dbStatus === 'missing'
-              ? '⚠️ Supabase no está configurado. Los datos se cargan de almacenamiento local.'
-              : 'Gestión de pedidos con base de datos en tiempo real.'}
+              ? '⚠️ Falta la conexión con la base de datos. Avísame para revisarlo.'
+              : 'Gestión de pedidos en tiempo real. Cada pedido entra solo a Kommo.'}
           </p>
         </div>
 
@@ -142,7 +128,7 @@ export default function OrderDashboard({ ordersUpdatedToggle, onOrderDelete, isO
           <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200 max-w-sm mx-auto">
             <form onSubmit={handleLogin} className="text-center py-4">
               <p className="text-xs text-slate-500 font-medium mb-4">
-                Inicia sesión con tu cuenta de administrador de Supabase para gestionar los pedidos.
+                Inicia sesión con tu cuenta de administrador para ver los pedidos.
               </p>
               <input
                 required
@@ -170,7 +156,7 @@ export default function OrderDashboard({ ordersUpdatedToggle, onOrderDelete, isO
               </button>
               {dbStatus === 'missing' && (
                 <p className="text-[10px] text-amber-600 font-bold mt-3">
-                  Primero configura VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en tu .env
+                  La página se publicó sin la conexión a la base de datos
                 </p>
               )}
             </form>
@@ -289,6 +275,16 @@ export default function OrderDashboard({ ordersUpdatedToggle, onOrderDelete, isO
                           <p className="text-[10px] text-slate-400 mt-1">
                             {new Date(o.date).toLocaleString('es-CO', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                           </p>
+                          <span
+                            className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded mt-1 border ${
+                              o.synced
+                                ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                : 'bg-red-50 text-red-500 border-red-100'
+                            }`}
+                            title={o.synced ? 'Este pedido ya está en Kommo' : 'El pedido se guardó aquí pero NO entró a Kommo. Revisa el error en la tabla pedidos.'}
+                          >
+                            {o.synced ? 'En Kommo' : 'No llegó a Kommo'}
+                          </span>
                         </td>
                         <td className="px-4 py-3">
                           <span className="font-extrabold text-slate-900 block leading-none">{o.clientName}</span>

@@ -23,10 +23,11 @@ import VideoTestimonials from './components/VideoTestimonials';
 import FAQSection from './components/FAQSection';
 import OrderDashboard from './components/OrderDashboard';
 import AdvisorBot from './components/AdvisorBot';
-import { PRODUCT_OFFERS } from './data';
-import { Order } from './types';
+import { PRODUCT_OFFERS as FALLBACK_OFFERS } from './data';
+import { Order, OrderOffer } from './types';
 import { motion } from 'motion/react';
 import { initTracking, trackPixelEvent } from './lib/tracking';
+import { getOfertas } from './lib/supabaseClient';
 
 export default function App() {
   const [selectedOfferId, setSelectedOfferId] = useState<string>('offer-2'); // Pre-select Mejor Oferta
@@ -35,11 +36,31 @@ export default function App() {
   const [stockCount, setStockCount] = useState<number>(12); // Urgency stock count
   const [timeLeft, setTimeLeft] = useState<number>(885); // 14 mins 45 secs countdown
   const [isTriggered, setIsTriggered] = useState<boolean>(false);
+  // Precios: empiezan con los del código y se sustituyen por los de Supabase
+  // si la conexión funciona (así puedes cambiar precios sin tocar la página).
+  const [ofertas, setOfertas] = useState<OrderOffer[]>(FALLBACK_OFFERS);
 
   // Initialize tracking on mount
   useEffect(() => {
     initTracking();
     trackPixelEvent('ViewContent', { content_name: 'Landing Page Anthelios Ultra Dry Touch' });
+  }, []);
+
+  // Cargar precios reales desde la base de datos
+  useEffect(() => {
+    let vivo = true;
+    getOfertas().then((lista) => {
+      if (vivo && lista && lista.length > 0) {
+        setOfertas(lista);
+        // Si la oferta seleccionada ya no existe, usar la segunda (la recomendada)
+        if (!lista.some((o) => o.id === selectedOfferId)) {
+          setSelectedOfferId(lista[1]?.id || lista[0].id);
+        }
+      }
+    });
+    return () => {
+      vivo = false;
+    };
   }, []);
 
   // Trigger button micro-interaction pulse on stockCount change
@@ -94,7 +115,7 @@ export default function App() {
 
   const handleOfferSelectAndScroll = (id: string) => {
     setSelectedOfferId(id);
-    const selectedOffer = PRODUCT_OFFERS.find(o => o.id === id);
+    const selectedOffer = ofertas.find(o => o.id === id);
     if (selectedOffer) {
       trackPixelEvent('InitiateCheckout', {
         content_name: selectedOffer.name,
@@ -413,13 +434,13 @@ export default function App() {
               </span>
               <div className="space-y-4">
                 <div className="text-center">
-                  <h3 className="font-extrabold text-slate-900 text-lg uppercase">{PRODUCT_OFFERS[0].name}</h3>
-                  <p className="text-xs text-slate-400 mt-1">{PRODUCT_OFFERS[0].subtitle}</p>
+                  <h3 className="font-extrabold text-slate-900 text-lg uppercase">{ofertas[0].name}</h3>
+                  <p className="text-xs text-slate-400 mt-1">{ofertas[0].subtitle || 'Protección diaria esencial'}</p>
                 </div>
 
                 <div className="py-4 border-y border-slate-100 flex flex-col items-center justify-center text-center gap-1.5">
                   <div>
-                    <span className="text-2xl font-black text-slate-900">{formatPrice(PRODUCT_OFFERS[0].price)}</span>
+                    <span className="text-2xl font-black text-slate-900">{formatPrice(ofertas[0].price)}</span>
                     <span className="text-[11px] text-slate-400 font-bold block mt-1">Precio Unitario Normal</span>
                   </div>
                 </div>
@@ -441,7 +462,7 @@ export default function App() {
               </div>
 
               <button
-                onClick={() => handleOfferSelectAndScroll(PRODUCT_OFFERS[0].id)}
+                onClick={() => handleOfferSelectAndScroll(ofertas[0].id)}
                 className="w-full mt-6 bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 px-4 rounded-xl text-center text-xs transition-colors cursor-pointer min-h-[44px]"
                 id="select-offer-1"
               >
@@ -458,14 +479,14 @@ export default function App() {
               <div className="space-y-4 pt-2">
                 <div className="text-center">
                   <h3 className="font-extrabold text-slate-900 text-xl uppercase text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-orange-400">
-                    {PRODUCT_OFFERS[1].name}
+                    {ofertas[1].name}
                   </h3>
-                  <p className="text-xs text-orange-600/80 font-bold mt-1">{PRODUCT_OFFERS[1].subtitle}</p>
+                  <p className="text-xs text-orange-600/80 font-bold mt-1">{ofertas[1].subtitle}</p>
                 </div>
 
                 <div className="py-4 border-y border-slate-100 flex flex-col items-center justify-center text-center gap-1.5">
                   <div>
-                    <span className="text-3xl font-black text-slate-900">{formatPrice(PRODUCT_OFFERS[1].price)}</span>
+                    <span className="text-3xl font-black text-slate-900">{formatPrice(ofertas[1].price)}</span>
                     <span className="text-[11px] text-slate-400 font-bold block mt-0.5">Precio final por las 2 unidades</span>
                   </div>
                   <div className="bg-green-100 text-green-700 text-[9px] font-black px-2.5 py-1 rounded uppercase tracking-wider select-none inline-block">
@@ -494,7 +515,7 @@ export default function App() {
               </div>
 
               <motion.button
-                onClick={() => handleOfferSelectAndScroll(PRODUCT_OFFERS[1].id)}
+                onClick={() => handleOfferSelectAndScroll(ofertas[1].id)}
                 animate={isTriggered ? {
                   scale: [1, 1.05, 0.98, 1.03, 1],
                   boxShadow: [
@@ -521,14 +542,16 @@ export default function App() {
               </span>
               <div className="space-y-4">
                 <div className="text-center">
-                  <h3 className="font-extrabold text-slate-900 text-lg uppercase">{PRODUCT_OFFERS[2].name}</h3>
-                  <p className="text-xs text-slate-400 mt-1">{PRODUCT_OFFERS[2].subtitle}</p>
+                  <h3 className="font-extrabold text-slate-900 text-lg uppercase">{ofertas[2].name}</h3>
+                  <p className="text-xs text-slate-400 mt-1">{ofertas[2].subtitle || 'Protección para toda la familia'}</p>
                 </div>
 
                 <div className="py-4 border-y border-slate-100 flex flex-col items-center justify-center text-center gap-1.5">
                   <div>
-                    <span className="text-2xl font-black text-slate-900">{formatPrice(PRODUCT_OFFERS[2].price)}</span>
-                    <span className="text-[11px] text-slate-400 font-bold block mt-1">Ahorras {formatPrice(PRODUCT_OFFERS[2].savings || 0)} (18%)</span>
+                    <span className="text-2xl font-black text-slate-900">{formatPrice(ofertas[2].price)}</span>
+                    {ofertas[2].savings ? (
+                      <span className="text-[11px] text-slate-400 font-bold block mt-1">Ahorras {formatPrice(ofertas[2].savings || 0)}</span>
+                    ) : null}
                   </div>
                 </div>
 
@@ -543,13 +566,13 @@ export default function App() {
                   </li>
                   <li className="flex items-center gap-2 text-green-600 font-bold bg-green-50 px-2.5 py-2 rounded-xl border border-green-200 shadow-2xs">
                     <Sparkles className="w-3.5 h-3.5 text-green-600" />
-                    <span>¡Ahorras $44.800 pesos (18% de descuento!)</span>
+                    <span>¡Ahorras {formatPrice(ofertas[2].savings || 0)} pesos!</span>
                   </li>
                 </ul>
               </div>
 
               <button
-                onClick={() => handleOfferSelectAndScroll(PRODUCT_OFFERS[2].id)}
+                onClick={() => handleOfferSelectAndScroll(ofertas[2].id)}
                 className="w-full mt-6 bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 px-4 rounded-xl text-center text-xs transition-colors cursor-pointer min-h-[44px]"
                 id="select-offer-3"
               >
@@ -620,6 +643,7 @@ export default function App() {
             selectedOfferId={selectedOfferId}
             onOfferSelect={(id) => setSelectedOfferId(id)}
             onOrderSuccess={handleOrderSuccess}
+            offers={ofertas}
           />
           
         </div>
@@ -665,10 +689,10 @@ export default function App() {
         <div>
           <span className="text-[9px] text-slate-400 font-bold block uppercase leading-none">PEDIR CONTRA ENTREGA</span>
           <span className="text-sm font-black text-slate-900 block mt-0.5">
-            {PRODUCT_OFFERS.find(o => o.id === selectedOfferId)?.name.split(' (')[0]}
+            {ofertas.find(o => o.id === selectedOfferId)?.name.split(' (')[0]}
           </span>
           <span className="text-xs font-bold text-orange-600 block leading-none">
-            {formatPrice(PRODUCT_OFFERS.find(o => o.id === selectedOfferId)?.price || 0)}
+            {formatPrice(ofertas.find(o => o.id === selectedOfferId)?.price || 0)}
           </span>
         </div>
         <button

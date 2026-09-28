@@ -3,16 +3,18 @@ import { CreditCard, Truck, Check, AlertCircle, ShoppingCart } from 'lucide-reac
 import { COLOMBIA_REGIONS, Department } from '../lib/colombiaData';
 import { PRODUCT_OFFERS } from '../data';
 import { OrderOffer, Order } from '../types';
-import { saveOrderToSupabase, isSupabaseConfigured } from '../lib/supabaseClient';
+import { createOrder } from '../lib/supabaseClient';
+import type { PedidoCreado } from '../lib/supabaseClient';
 import { trackPixelEvent } from '../lib/tracking';
 
 interface CheckoutFormProps {
   selectedOfferId: string;
   onOfferSelect: (id: string) => void;
   onOrderSuccess: (order: Order) => void;
+  offers?: OrderOffer[];
 }
 
-export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSuccess }: CheckoutFormProps) {
+export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSuccess, offers }: CheckoutFormProps) {
   const [formData, setFormData] = useState({
     clientName: '',
     clientPhone: '',
@@ -31,8 +33,12 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
   const [phoneError, setPhoneError] = useState('');
   const [successOrder, setSuccessOrder] = useState<Order | null>(null);
   const [submitError, setSubmitError] = useState('');
+  // Campo invisible: los robots lo llenan solos, las personas nunca lo ven.
+  const [websiteTrampa, setWebsiteTrampa] = useState('');
 
-  const activeOffer = PRODUCT_OFFERS.find(o => o.id === selectedOfferId) || PRODUCT_OFFERS[1];
+  // Si el servidor manda los precios de Supabase, se usan; si no, los del código.
+  const listaOfertas = offers && offers.length > 0 ? offers : PRODUCT_OFFERS;
+  const activeOffer = listaOfertas.find(o => o.id === selectedOfferId) || listaOfertas[1] || listaOfertas[0];
 
   useEffect(() => {
     if (formData.department) {
@@ -81,11 +87,37 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
     }
 
     setIsSubmitting(true);
+    setSubmitError('');
 
-    const orderId = `${paymentMethod === 'contraentrega' ? 'KOMMO' : 'MP'}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const metodoPago = paymentMethod === 'contraentrega' ? 'Contra Entrega' : 'Mercado Pago';
+
+    // El pedido lo crea el servidor: valida los datos, confirma el precio y
+    // lo manda a Kommo. Si algo falla, no se confirma nada al cliente.
+    let creado: PedidoCreado;
+    try {
+      creado = await createOrder({
+        clientName: formData.clientName.trim(),
+        clientPhone: formData.clientPhone,
+        clientEmail: formData.clientEmail.trim(),
+        documentId: formData.documentId.trim(),
+        department: formData.department,
+        city: formData.city,
+        address: formData.address.trim(),
+        address2: formData.address2.trim(),
+        notes: formData.notes.trim(),
+        offerId: activeOffer.id,
+        paymentMethod: metodoPago as 'Contra Entrega' | 'Mercado Pago',
+        website: websiteTrampa,
+      });
+    } catch (err) {
+      console.error('No se pudo crear el pedido:', err);
+      setSubmitError(err instanceof Error ? err.message : 'No pudimos registrar tu pedido. Intenta de nuevo.');
+      setIsSubmitting(false);
+      return;
+    }
 
     const newOrder: Order = {
-      id: orderId,
+      id: creado.orderId,
       clientName: formData.clientName,
       clientPhone: formData.clientPhone,
       clientEmail: formData.clientEmail.trim(),
@@ -97,41 +129,22 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
       notes: formData.notes.trim(),
       offerId: activeOffer.id,
       offerName: activeOffer.name,
-      totalPrice: activeOffer.price,
+      totalPrice: creado.total ?? activeOffer.price,
       quantity: activeOffer.quantity,
       status: 'new',
       date: new Date().toISOString(),
-      synced: false,
-      paymentMethod: paymentMethod === 'contraentrega' ? 'Contra Entrega' : 'Mercado Pago'
+      synced: true,
+      paymentMethod: metodoPago
     };
 
-    // Save to Supabase (primary)
-    const saved = await saveOrderToSupabase(newOrder);
-    if (saved) {
-      newOrder.synced = true;
-      console.log('Pedido guardado en Supabase exitosamente');
-    }
-
-    // Fallback: localStorage
-    try {
-      const existingOrders = JSON.parse(localStorage.getItem('colombia_sunscreen_orders') || '[]');
-      existingOrders.unshift(newOrder);
-      localStorage.setItem('colombia_sunscreen_orders', JSON.stringify(existingOrders));
-    } catch (err) {
-      console.error('Error saving to localStorage:', err);
-    }
-
-    if (!saved && !isSupabaseConfigured()) {
-      setSubmitError('Supabase no está configurado. El pedido se guardó localmente.');
-    } else if (!saved) {
-      setSubmitError('Error al guardar en la base de datos. El pedido se guardó localmente.');
-    }
-
-    trackPixelEvent('Purchase', {
+    // OJO: aquí NO se manda el evento "Purchase" porque el cliente todavía no
+    // ha pagado. Se manda "Lead" (dejó sus datos), que sí es verdad.
+    // "Purchase" solo debe enviarse cuando el pago esté confirmado.
+    trackPixelEvent('Lead', {
       value: newOrder.totalPrice,
       currency: 'COP',
       content_name: newOrder.offerName,
-      num_items: newOrder.quantity
+      content_type: 'product'
     });
 
     setSuccessOrder(newOrder);
@@ -152,6 +165,8 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
   const resetOrderForm = () => {
     setSuccessOrder(null);
     setSubmitError('');
+    setPhoneError('');
+    setWebsiteTrampa('');
     setFormData({
       clientName: '',
       clientPhone: '',
@@ -180,7 +195,7 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
           </div>
 
           <span className="text-emerald-700 bg-emerald-50 text-[10px] font-black px-3.5 py-1.5 rounded-full border border-emerald-100 tracking-wider">
-            {successOrder.id.startsWith('KOMMO') ? 'RESERVA REGISTRADA CON ÉXITO 🚚' : 'RESERVA REGISTRADA CON ÉXITO 💳'}
+            {successOrder.paymentMethod === 'Mercado Pago' ? 'RESERVA REGISTRADA CON ÉXITO 💳' : 'RESERVA REGISTRADA CON ÉXITO 🚚'}
           </span>
 
           <h3 className="text-2xl font-black text-slate-800 mt-4 mb-1">
@@ -209,34 +224,12 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
             </div>
           </div>
 
-          {successOrder.id.startsWith('KOMMO') ? (
-            <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4.5 text-center my-6">
-              <span className="text-[9px] tracking-wider uppercase font-black text-white bg-orange-600 px-3 py-1 rounded">PASO EXCLUSIVO REQUERIDO 🇨🇴</span>
-              <h4 className="text-sm font-black text-slate-900 mt-3 mb-1">¡Completa tu Envío Contra Entrega!</h4>
-              <p className="text-xs text-slate-600 max-w-sm mx-auto mb-4 leading-relaxed">
-                Para que tus datos de entrega ingresen a nuestro sistema <strong>Kommo CRM</strong> y el mensajero sea asignado hoy mismo, haz clic en el botón oficial de abajo para confirmar tu despacho:
-              </p>
-              <a
-                href={activeOffer.kommoUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-700 text-white font-black py-4 px-6 rounded-xl transition-all shadow-md text-sm md:text-base animate-pulse w-full max-w-xs cursor-pointer"
-                id="success-kommo-redirect"
-              >
-                IR AL FORMULARIO COMPLETO 🚀
-              </a>
-              {activeOffer.quantity === 3 && (
-                <p className="text-[9.5px] text-slate-500 mt-2.5 max-w-xs mx-auto leading-tight">
-                  *Nota: Se usará el formulario de 2 unidades, pero podrás confirmar manualmente que deseas la promoción familiar de 3 unidades.
-                </p>
-              )}
-            </div>
-          ) : (
+          {successOrder.paymentMethod === 'Mercado Pago' ? (
             <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4.5 text-center my-6">
               <span className="text-[9px] tracking-wider uppercase font-black text-white bg-blue-600 px-3 py-1 rounded">PAGO INMEDIATO SEGURO 💳</span>
               <h4 className="text-sm font-black text-slate-900 mt-3 mb-1">Paga con Mercado Pago</h4>
               <p className="text-xs text-slate-600 max-w-sm mx-auto mb-4 leading-relaxed">
-                Completa tu pago seguro con PSE, Tarjeta de Crédito, Débito o Efecty vía Mercado Pago haciendo clic en el botón oficial de pago de la promoción:
+                Ya tenemos tus datos de entrega reservados. Completa tu pago seguro con PSE, Tarjeta de Crédito, Débito o Efecty vía Mercado Pago haciendo clic en el botón oficial de pago:
               </p>
               <a
                 href={activeOffer.mercadopagoUrl}
@@ -247,6 +240,14 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
               >
                 PAGAR CON MERCADO PAGO 💳
               </a>
+            </div>
+          ) : (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4.5 text-center my-6">
+              <span className="text-[9px] tracking-wider uppercase font-black text-white bg-emerald-600 px-3 py-1 rounded">PEDIDO EN CAMINO 🚚</span>
+              <h4 className="text-sm font-black text-slate-900 mt-3 mb-1">¡Ya lo registramos!</h4>
+              <p className="text-xs text-slate-600 max-w-sm mx-auto leading-relaxed">
+                Nuestro equipo ya tiene tus datos y te escribe por WhatsApp al número que registraste para confirmar la entrega. Pagas en efectivo al recibir el producto.
+              </p>
             </div>
           )}
 
@@ -281,10 +282,30 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
             <h3 className="text-lg md:text-xl font-bold tracking-tight">Formulario de Pedido</h3>
           </div>
 
+          {/* Campo invisible contra robots. Ni se ve ni se llena a mano. */}
+          <div aria-hidden="true" className="absolute w-px h-px overflow-hidden opacity-0 pointer-events-none left-[-9999px]">
+            <label htmlFor="website">No completar</label>
+            <input
+              id="website"
+              name="website"
+              type="text"
+              tabIndex={-1}
+              autoComplete="off"
+              value={websiteTrampa}
+              onChange={(e) => setWebsiteTrampa(e.target.value)}
+            />
+          </div>
+
+          {submitError && (
+            <div className="mb-5 bg-red-500/10 border border-red-500/30 text-red-300 text-xs font-medium px-4 py-3 rounded-xl">
+              {submitError}
+            </div>
+          )}
+
           <div className="mb-6 space-y-2.5">
             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">1. Selecciona tu Promoción</label>
             <div className="grid grid-cols-1 gap-2">
-              {PRODUCT_OFFERS.map((offer) => {
+              {listaOfertas.map((offer) => {
                 const isSelected = offer.id === selectedOfferId;
                 return (
                   <button

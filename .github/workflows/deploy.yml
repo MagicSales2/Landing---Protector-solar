@@ -1,0 +1,51 @@
+name: Publicar landing
+
+on:
+  push:
+    branches: [home]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publicar-landing
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Revisar que el código compile sin errores
+        run: npm run lint
+
+      - name: Construir la página
+        run: npm run build
+        env:
+          GITHUB_PAGES: 'true'
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_META_PIXEL_ID: ${{ secrets.VITE_META_PIXEL_ID }}
+          VITE_TIKTOK_PIXEL_ID: ${{ secrets.VITE_TIKTOK_PIXEL_ID }}
+
+      - name: Publicar en la rama gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          publish_branch: gh-pages
+          user_name: github-actions[bot]
+          user_email: github-actions[bot]@users.noreply.github.com
+          commit_message: 'Publicar landing (${{ github.sha }})'
