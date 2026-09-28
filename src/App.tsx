@@ -29,6 +29,11 @@ import { motion } from 'motion/react';
 import { initTracking, trackPixelEvent } from './lib/tracking';
 import { getOfertas } from './lib/supabaseClient';
 
+// URL oculta para abrir el panel de administrador (sin botón visible).
+// Cambia esta clave si algún día quieres usar otra. Solo funciona con este
+// hash exacto en la dirección, p. ej. .../#/panel-anthelios-4781
+const ADMIN_HASH = '#/panel-anthelios-4781';
+
 export default function App() {
   const [selectedOfferId, setSelectedOfferId] = useState<string>('offer-2'); // Pre-select Mejor Oferta
   const [ordersUpdatedToggle, setOrdersUpdatedToggle] = useState<boolean>(false);
@@ -39,6 +44,22 @@ export default function App() {
   // Precios: empiezan con los del código y se sustituyen por los de Supabase
   // si la conexión funciona (así puedes cambiar precios sin tocar la página).
   const [ofertas, setOfertas] = useState<OrderOffer[]>(FALLBACK_OFFERS);
+
+  // Abre el panel solo cuando la URL tiene el hash secreto (no hay botón visible)
+  useEffect(() => {
+    const chequear = () => setShowAdminModal(window.location.hash === ADMIN_HASH);
+    chequear();
+    window.addEventListener('hashchange', chequear);
+    return () => window.removeEventListener('hashchange', chequear);
+  }, []);
+
+  // Cerrar el panel y quitar el hash secreto de la URL al mismo tiempo
+  const cerrarAdmin = () => {
+    setShowAdminModal(false);
+    if (window.location.hash === ADMIN_HASH) {
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+  };
 
   // Initialize tracking on mount
   useEffect(() => {
@@ -668,13 +689,6 @@ export default function App() {
             <span>•</span>
             <a href="#preguntas-frecuentes" className="hover:text-slate-300 transition-colors font-semibold">FAQs</a>
             <span>•</span>
-            <button 
-              onClick={() => setShowAdminModal(true)} 
-              className="hover:text-slate-300 transition-colors font-semibold cursor-pointer underline decoration-orange-500/50"
-            >
-              Miembros
-            </button>
-            <span>•</span>
             <a href="#formulario-pedido" className="hover:text-slate-300 transition-colors font-semibold">Pedir Ahora</a>
           </div>
           <p className="text-[10px] text-slate-600 pt-3">
@@ -710,7 +724,7 @@ export default function App() {
         ordersUpdatedToggle={ordersUpdatedToggle}
         onOrderDelete={handleOrderDelete}
         isOpen={showAdminModal}
-        onClose={() => setShowAdminModal(false)}
+        onClose={cerrarAdmin}
       />
 
       {/* AUTOMATED ADVISORY BOT / FAQ ASSISTANT */}
