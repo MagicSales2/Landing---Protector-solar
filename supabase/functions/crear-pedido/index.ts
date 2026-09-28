@@ -338,6 +338,7 @@ async function enviarAKommo(sb: SupabaseClient, token: string, pedido: ResumenPe
   conTexto(rastreo, 'cf_referrer', pedido.referrer)
 
   conOpcion('cf_producto', `enum_producto_${pedido.cantidad}`)
+  conTexto(campos, 'cf_adiciones', `Protector solar x${pedido.cantidad}`)
   conOpcion('cf_metodo_pago', pedido.metodoPago === 'Contra Entrega' ? 'enum_contraentrega' : 'enum_mercadopago')
 
   const statusId =

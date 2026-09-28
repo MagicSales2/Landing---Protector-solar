@@ -168,10 +168,11 @@ insert into public.kommo_config (clave, valor, descripcion) values
   ('cf_cantidad',   '1430737', 'Cantidad'),
   ('cf_total',      '1430739', 'Total'),
   ('cf_metodo_pago','1406032', 'Medio De Pago'),
+  ('cf_adiciones', '543654',  'Adiciones o cambios'),
   -- Opciones de las listas desplegables
-  ('enum_producto_1',      '1027895', 'Opción "Protector 1 unidad"'),
-  ('enum_producto_2',      '1027897', 'Opción "Protector 2 unidades"'),
-  ('enum_producto_3',      '1031465', 'Opción "Protector 3 unidades"'),
+  ('enum_producto_1',      '1027895', 'Opción "Protector solar x1"'),
+  ('enum_producto_2',      '1027897', 'Opción "Protector solar x2"'),
+  ('enum_producto_3',      '1031465', 'Opción "Protector solar x3"'),
   -- Las opciones 1027923 y 1027927 existían duplicadas/dañadas en Kommo
   -- (1027927 guardaba "PayU"). La lista de "Medio De Pago" se reconstruyó:
   -- ahora usa IDs frescos confirmados el 2026-09-28.
@@ -225,7 +226,11 @@ language sql stable security definer
 set search_path = public as $$
   select exists (
     select 1 from public.administradores a
-    where a.user_id = auth.uid() and a.activo
+    where a.activo
+      and (
+        a.user_id = auth.uid()
+        or lower(a.email) = lower(auth.jwt() ->> 'email')
+      )
   );
 $$;
 
