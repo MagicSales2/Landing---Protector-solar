@@ -88,7 +88,7 @@ export const PRODUCT_OFFERS: OrderOffer[] = [
     price: 84900,
     isPopular: false,
     quantity: 1,
-    mercadopagoUrl: "https://link.mercadopago.com.co/anthelios1un"
+    mercadopagoUrl: "https://mpago.li/2SqfiSu"
   },
   {
     id: "offer-2",
@@ -98,7 +98,7 @@ export const PRODUCT_OFFERS: OrderOffer[] = [
     savings: 19900,
     isPopular: true,
     quantity: 2,
-    mercadopagoUrl: "https://link.mercadopago.com.co/anthelios2un"
+    mercadopagoUrl: "https://mpago.li/134J7Me"
   },
   {
     id: "offer-3",
@@ -108,6 +108,6 @@ export const PRODUCT_OFFERS: OrderOffer[] = [
     savings: 44800,
     isPopular: false,
     quantity: 3,
-    mercadopagoUrl: "https://link.mercadopago.com.co/anthelios3un"
+    mercadopagoUrl: "https://mpago.li/2bMXi46"
   }
 ];

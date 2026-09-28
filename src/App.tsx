@@ -23,6 +23,7 @@ import VideoTestimonials from './components/VideoTestimonials';
 import FAQSection from './components/FAQSection';
 import OrderDashboard from './components/OrderDashboard';
 import AdvisorBot from './components/AdvisorBot';
+import PagoGracias from './components/PagoGracias';
 import { PRODUCT_OFFERS as FALLBACK_OFFERS } from './data';
 import { Order, OrderOffer } from './types';
 import { motion } from 'motion/react';
@@ -38,6 +39,7 @@ export default function App() {
   const [selectedOfferId, setSelectedOfferId] = useState<string>('offer-2'); // Pre-select Mejor Oferta
   const [ordersUpdatedToggle, setOrdersUpdatedToggle] = useState<boolean>(false);
   const [showAdminModal, setShowAdminModal] = useState<boolean>(false);
+  const [showGracias, setShowGracias] = useState<boolean>(false);
   const [stockCount, setStockCount] = useState<number>(12); // Urgency stock count
   const [timeLeft, setTimeLeft] = useState<number>(885); // 14 mins 45 secs countdown
   const [isTriggered, setIsTriggered] = useState<boolean>(false);
@@ -46,8 +48,13 @@ export default function App() {
   const [ofertas, setOfertas] = useState<OrderOffer[]>(FALLBACK_OFFERS);
 
   // Abre el panel solo cuando la URL tiene el hash secreto (no hay botón visible)
+  // y muestra la página de gracias cuando Mercado Pago devuelve al cliente.
   useEffect(() => {
-    const chequear = () => setShowAdminModal(window.location.hash === ADMIN_HASH);
+    const chequear = () => {
+      const hash = window.location.hash;
+      setShowAdminModal(hash === ADMIN_HASH);
+      setShowGracias(hash.startsWith('#/gracias'));
+    };
     chequear();
     window.addEventListener('hashchange', chequear);
     return () => window.removeEventListener('hashchange', chequear);
@@ -726,6 +733,9 @@ export default function App() {
         isOpen={showAdminModal}
         onClose={cerrarAdmin}
       />
+
+      {/* Página final tras pagar en Mercado Pago (confirma el pago real) */}
+      {showGracias && !showAdminModal && <PagoGracias />}
 
       {/* AUTOMATED ADVISORY BOT / FAQ ASSISTANT */}
       <AdvisorBot />

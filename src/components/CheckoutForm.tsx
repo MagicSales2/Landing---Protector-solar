@@ -33,6 +33,10 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
   const [phoneError, setPhoneError] = useState('');
   const [successOrder, setSuccessOrder] = useState<Order | null>(null);
   const [submitError, setSubmitError] = useState('');
+  // Link de pago de Mercado Pago (único si se pudo crear, fijo de respaldo).
+  const [mpPagoUrl, setMpPagoUrl] = useState('');
+  // True si el servidor creó el link único y ya mandamos al cliente a pagar.
+  const [mpRedirigio, setMpRedirigio] = useState(false);
   // Campo invisible: los robots lo llenan solos, las personas nunca lo ven.
   const [websiteTrampa, setWebsiteTrampa] = useState('');
 
@@ -147,6 +151,17 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
       content_type: 'product'
     });
 
+    // Con Mercado Pago, se abre el link único de este pedido. Si el servidor no
+    // alcanzó a crear el link único, se usa el link fijo (y queda a la espera).
+    if (newOrder.paymentMethod === 'Mercado Pago') {
+      const url = (creado.initPoint ?? creado.mercadopagoUrl ?? activeOffer.mercadopagoUrl ?? '').trim();
+      setMpPagoUrl(url);
+      setMpRedirigio(!!creado.initPoint);
+      if (creado.initPoint) {
+        window.location.assign(creado.initPoint);
+      }
+    }
+
     setSuccessOrder(newOrder);
     setIsSubmitting(false);
     onOrderSuccess(newOrder);
@@ -167,6 +182,8 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
     setSubmitError('');
     setPhoneError('');
     setWebsiteTrampa('');
+    setMpPagoUrl('');
+    setMpRedirigio(false);
     setFormData({
       clientName: '',
       clientPhone: '',
@@ -227,19 +244,28 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
           {successOrder.paymentMethod === 'Mercado Pago' ? (
             <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4.5 text-center my-6">
               <span className="text-[9px] tracking-wider uppercase font-black text-white bg-blue-600 px-3 py-1 rounded">PAGO INMEDIATO SEGURO 💳</span>
-              <h4 className="text-sm font-black text-slate-900 mt-3 mb-1">Paga con Mercado Pago</h4>
+              <h4 className="text-sm font-black text-slate-900 mt-3 mb-1">Completa tu pago con Mercado Pago</h4>
               <p className="text-xs text-slate-600 max-w-sm mx-auto mb-4 leading-relaxed">
-                Ya tenemos tus datos de entrega reservados. Completa tu pago seguro con PSE, Tarjeta de Crédito, Débito o Efecty vía Mercado Pago haciendo clic en el botón oficial de pago:
+                Ya tenemos tus datos reservados. Paga con PSE, Tarjeta de Crédito, Débito o Efecty y tu pedido queda confirmado al instante:
               </p>
-              <a
-                href={activeOffer.mercadopagoUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 bg-[#009EE3] hover:bg-[#0086C3] text-white font-black py-4 px-6 rounded-xl transition-all shadow-md text-sm md:text-base animate-pulse w-full max-w-xs cursor-pointer"
-                id="success-mercadopago-redirect"
-              >
-                PAGAR CON MERCADO PAGO 💳
-              </a>
+              {mpPagoUrl ? (
+                <a
+                  href={mpPagoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 bg-[#009EE3] hover:bg-[#0086C3] text-white font-black py-4 px-6 rounded-xl transition-all shadow-md text-sm md:text-base animate-pulse w-full max-w-xs cursor-pointer"
+                  id="success-mercadopago-redirect"
+                >
+                  PAGAR CON MERCADO PAGO 💳
+                </a>
+              ) : (
+                <p className="text-xs text-slate-600 max-w-sm mx-auto leading-relaxed">
+                  Se está generando tu link de pago... si no se abrió, vuelve a intentarlo en un momento.
+                </p>
+              )}
+              <p className="text-[10px] text-slate-500 mt-3 font-medium">
+                {mpRedirigio ? 'Se abrió Mercado Pago en esta pestaña. Si no cargó, toca el botón azul.' : 'Puedes pagar con este botón cuando quieras; tu reserva queda guardada.'}
+              </p>
             </div>
           ) : (
             <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4.5 text-center my-6">

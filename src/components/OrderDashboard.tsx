@@ -10,7 +10,8 @@ import {
   isAdmin,
   getSession,
   restoreSession,
-  isSupabaseConfigured
+  isSupabaseConfigured,
+  confirmarPedidoManual
 } from '../lib/supabaseClient';
 
 interface OrderDashboardProps {
@@ -79,6 +80,29 @@ export default function OrderDashboard({ ordersUpdatedToggle, onOrderDelete, isO
     setOrders(prev => prev.filter(o => o.id !== id));
     await deleteOrderFromSupabase(id);
     onOrderDelete();
+  };
+
+  const [confirmando, setConfirmando] = useState<string | null>(null);
+
+  // Confirma a mano un pedido de Mercado Pago (cuando ya llegó la plata y el
+  // sistema no lo detectó solo). Recién ahí manda la venta a Kommo.
+  const handleConfirmarPago = async (id: string) => {
+    if (!confirm('¿Confirmas que este pedido YA fue pagado con Mercado Pago?')) return;
+    setConfirmando(id);
+    try {
+      const res = await confirmarPedidoManual(id);
+      if (!res.ok) {
+        alert(res.error || 'No se pudo confirmar el pedido.');
+      } else {
+        alert(`Pago confirmado. Pedido ${res.orderId} enviado a Kommo.`);
+      }
+    } catch {
+      alert('No se pudo confirmar el pedido. Intenta de nuevo.');
+    } finally {
+      setConfirmando(null);
+      await loadOrders();
+      onOrderDelete();
+    }
   };
 
   const filteredOrders = orders.filter(o => {
@@ -238,6 +262,8 @@ export default function OrderDashboard({ ordersUpdatedToggle, onOrderDelete, isO
                 >
                   <option value="all">Todos ({orders.length})</option>
                   <option value="new">Nuevos</option>
+                  <option value="pendiente_pago">Pendiente de pago</option>
+                  <option value="pagado">Pagados</option>
                   <option value="confirmed">Confirmados</option>
                   <option value="shipped">Despachados</option>
                   <option value="delivered">Entregados</option>
@@ -336,6 +362,8 @@ export default function OrderDashboard({ ordersUpdatedToggle, onOrderDelete, isO
                             onChange={e => handleUpdateStatus(o.id, e.target.value as Order['status'])}
                             className={`text-[10px] font-bold px-2.5 py-1 rounded-full border bg-white focus:outline-none outline-none ${
                               o.status === 'new' ? 'text-blue-600 border-blue-200 bg-blue-50' :
+                              o.status === 'pendiente_pago' ? 'text-orange-600 border-orange-200 bg-orange-50' :
+                              o.status === 'pagado' ? 'text-blue-600 border-blue-200 bg-blue-50' :
                               o.status === 'confirmed' ? 'text-amber-600 border-amber-200 bg-amber-50' :
                               o.status === 'shipped' ? 'text-indigo-600 border-indigo-200 bg-indigo-50' :
                               o.status === 'delivered' ? 'text-green-600 border-green-200 bg-green-50' :
@@ -343,6 +371,8 @@ export default function OrderDashboard({ ordersUpdatedToggle, onOrderDelete, isO
                             }`}
                           >
                             <option value="new">Nuevo</option>
+                            <option value="pendiente_pago">Pendiente de pago</option>
+                            <option value="pagado">Pagado</option>
                             <option value="confirmed">Confirmado</option>
                             <option value="shipped">Despachado</option>
                             <option value="delivered">Entregado</option>
@@ -350,6 +380,16 @@ export default function OrderDashboard({ ordersUpdatedToggle, onOrderDelete, isO
                           </select>
                         </td>
                         <td className="px-4 py-3 text-right whitespace-nowrap">
+                          {o.paymentMethod && o.paymentMethod.includes('Mercado') && o.status === 'pendiente_pago' && (
+                            <button
+                              onClick={() => handleConfirmarPago(o.id)}
+                              disabled={confirmando === o.id}
+                              className="p-1 px-2 text-emerald-700 bg-emerald-50 rounded-md hover:bg-emerald-100 transition-colors cursor-pointer inline-flex items-center font-bold mr-2 disabled:opacity-50"
+                              title="Marcar como pagado y enviar a Kommo"
+                            >
+                              {confirmando === o.id ? 'Confirmando...' : 'Confirmar pago'}
+                            </button>
+                          )}
                           <button
                             onClick={() => handleDeleteOrder(o.id)}
                             className="p-1 px-2 text-red-500 hover:text-red-700 bg-red-50 rounded-md hover:bg-red-100 transition-colors cursor-pointer inline-flex items-center"

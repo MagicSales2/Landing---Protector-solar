@@ -13,7 +13,7 @@ export interface Order {
   offerName: string;
   totalPrice: number;
   quantity: number;
-  status: 'new' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
+  status: 'new' | 'pendiente_pago' | 'pagado' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
   date: string;
   synced?: boolean;
   paymentMethod?: string;

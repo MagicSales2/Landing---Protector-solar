@@ -5,14 +5,17 @@
 //    2. Confirma el precio contra la tabla de ofertas (nadie inventa precios)
 //    3. Descarta spam y pedidos repetidos
 //    4. Guarda el pedido en la base de datos
-//    5. Lo manda a Kommo: contacto + venta en la etapa correcta
-//    6. Anota si el envío a Kommo quedó bien
+//    5. Contra Entrega  → lo manda a Kommo en la etapa correcta
+//       Mercado Pago   → crea un link único de pago y NO lo manda a Kommo.
+//       El pedido queda "pendiente_pago"; solo cuando Mercado Pago confirme
+//       el pago (función confirmar-pago) pasa a "pagado" y entra a Kommo.
 //
-//  Si Kommo se cae, el pedido IGUAL queda guardado en la base de datos
-//  (la base es la fuente de verdad; Kommo es un espejo).
+//  Si Kommo o Mercado Pago se caen, el pedido IGUAL queda guardado en la
+//  base de datos (la base es la fuente de verdad).
 // ============================================================================
 
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { enviarAKommo, ResumenPedido } from '../_shared/kommo.ts'
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -20,11 +23,10 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-const ETAPA_POR_CANTIDAD: Record<number, string> = {
-  1: 'status_contraentrega_1',
-  2: 'status_contraentrega_2',
-  3: 'status_contraentrega_3',
-}
+// Página a la que Mercado Pago devuelve al cliente cuando termina de pagar.
+const SITIO = 'https://magicsales2.github.io/Landing---Protector-solar'
+// Función que recibe la notificación (webhook) de Mercado Pago al haber pago.
+const URL_NOTIFICACION = 'https://drzbxmajsbkdkydsbjzj.supabase.co/functions/v1/confirmar-pago'
 
 type PedidoEntrada = {
   clientName?: string
@@ -42,28 +44,6 @@ type PedidoEntrada = {
   utm?: Record<string, string | undefined>
   userAgent?: string
   referrer?: string
-}
-
-type ResumenPedido = {
-  id: string
-  total_price: number
-  nombre: string
-  celular: string
-  correo: string
-  documento: string
-  departamento: string
-  ciudad: string
-  direccion: string
-  direccion2: string
-  notas: string
-  cantidad: number
-  metodoPago: string
-  utm_source: string | null
-  utm_medium: string | null
-  utm_campaign: string | null
-  utm_content: string | null
-  utm_term: string | null
-  referrer: string | null
 }
 
 function texto(valor: unknown, max: number): string {
@@ -84,11 +64,46 @@ function generarId(): string {
   return `PED-${String(ahora.getFullYear()).slice(2)}${mes}-${rand}`
 }
 
+// Crea el "Checkout Pro" de Mercado Pago: un link único ligado a este pedido
+// (external_reference) para poder confirmar el pago cuando llegue la
+// notificación o cuando el cliente vuelva desde Mercado Pago.
+async function crearPreferenciaMP(token: string, pedido: { id: string; total: number; producto: string; cantidad: number }) {
+  const res = await fetch('https://api.mercadopago.com/checkout/preferences', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      items: [
+        {
+          title: pedido.producto,
+          quantity: 1,
+          unit_price: pedido.total,
+          currency_id: 'COP',
+        },
+      ],
+      external_reference: pedido.id,
+      notification_url: URL_NOTIFICACION,
+      auto_return: 'approved',
+      back_urls: {
+        success: `${SITIO}/#/gracias`,
+        pending: `${SITIO}/#/gracias?estado=pendiente`,
+        failure: `${SITIO}/#/gracias?estado=fallecido`,
+      },
+    }),
+  })
+  const cuerpo = await res.json()
+  if (!res.ok) {
+    throw new Error(`Mercado Pago ${res.status}: ${String(cuerpo?.message ?? JSON.stringify(cuerpo)).slice(0, 300)}`)
+  }
+  return {
+    preferenciaId: String(cuerpo?.id ?? ''),
+    initPoint: String(cuerpo?.init_point || cuerpo?.sandbox_init_point || ''),
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS })
   if (req.method !== 'POST') return json({ error: 'Método no permitido' }, 405)
 
-  // El token de Kommo vive como secreto de la función: nunca viaja al navegador.
   const kommoToken = Deno.env.get('KOMMO_TOKEN')
   if (!kommoToken) {
     console.error('Falta el secreto KOMMO_TOKEN en la configuración de la función')
@@ -137,7 +152,7 @@ Deno.serve(async (req) => {
   // --- 2) El precio lo decide la base de datos
   const { data: oferta, error: errorOferta } = await sb
     .from('ofertas')
-    .select('id, nombre, cantidad, precio, activo')
+    .select('id, nombre, cantidad, precio, activo, mercadopago_url')
     .eq('id', offerId)
     .maybeSingle()
 
@@ -173,6 +188,7 @@ Deno.serve(async (req) => {
 
   // --- 4) Guardar el pedido
   const id = generarId()
+  const esMercadoPago = metodoPago === 'Mercado Pago'
   const { data: guardado, error: errorGuardado } = await sb
     .from('pedidos')
     .insert({
@@ -191,7 +207,8 @@ Deno.serve(async (req) => {
       quantity: oferta.cantidad,
       total_price: oferta.precio,
       payment_method: metodoPago,
-      status: 'new',
+      // Con pago online el pedido espera el pago real antes de ser venta.
+      status: esMercadoPago ? 'pendiente_pago' : 'new',
       utm_source: texto(entrada.utm?.utm_source, 100) || null,
       utm_medium: texto(entrada.utm?.utm_medium, 100) || null,
       utm_campaign: texto(entrada.utm?.utm_campaign, 100) || null,
@@ -208,7 +225,7 @@ Deno.serve(async (req) => {
     return json({ error: 'No pudimos registrar tu pedido. Intenta de nuevo.' }, 500)
   }
 
-  // A partir de aquí el pedido YA está guardado: si Kommo falla, no se pierde.
+  // A partir de aquí el pedido YA está guardado: si Kommo/MP falla, no se pierde.
   const pedido: ResumenPedido = {
     id,
     total_price: guardado.total_price,
@@ -231,7 +248,34 @@ Deno.serve(async (req) => {
     referrer: guardado.referrer,
   }
 
-  // --- 5) Enviar a Kommo
+  // --- 5) Mercado Pago: pedido pendiente + link único de pago (sin Kommo)
+  if (esMercadoPago) {
+    const mpToken = Deno.env.get('MP_TOKEN')
+    if (mpToken) {
+      try {
+        const { preferenciaId, initPoint } = await crearPreferenciaMP(mpToken, {
+          id,
+          total: pedido.total_price,
+          producto: `Protector Solar Anthelios SPF 50+ x${pedido.cantidad}`,
+          cantidad: pedido.cantidad,
+        })
+        await sb.from('pedidos').update({ mp_preferencia_id: preferenciaId || null }).eq('id', id)
+        if (initPoint) {
+          return json({ ok: true, orderId: id, numero: guardado.numero, total: guardado.total_price, initPoint, mercadopagoUrl: oferta.mercadopago_url || '' })
+        }
+      } catch (err) {
+        // Sin link único: el cliente paga con el link fijo y el comerciante
+        // confirma el pago a mano desde el panel.
+        console.error('No se pudo crear la preferencia de Mercado Pago:', err instanceof Error ? err.message : err)
+        await sb.from('pedidos').update({ kommo_estado: 'error', kommo_error: `MP ${(err instanceof Error ? err.message : String(err)).slice(0, 500)}` }).eq('id', id)
+        await sb.from('sync_log').insert({ pedido_id: id, destino: 'mercadopago', estado: 'error', detalle: (err instanceof Error ? err.message : String(err)).slice(0, 500) })
+      }
+    }
+    // Respuesta con link fijo como respaldo (botón en la página).
+    return json({ ok: true, orderId: id, numero: guardado.numero, total: guardado.total_price, initPoint: null, mercadopagoUrl: oferta.mercadopago_url || '' })
+  }
+
+  // --- 6) Contra Entrega: enviar a Kommo
   try {
     const { leadId, contactId, camposPendientes } = await enviarAKommo(sb, kommoToken, pedido)
     const aviso = camposPendientes.length ? ` · OJO: campo de producto/medio de pago no confirmado por Kommo` : ''
@@ -254,191 +298,3 @@ Deno.serve(async (req) => {
 
   return json({ ok: true, orderId: id, numero: guardado.numero, total: guardado.total_price })
 })
-
-// ============================================================================
-//  Kommo
-// ============================================================================
-
-async function enviarAKommo(sb: SupabaseClient, token: string, pedido: ResumenPedido) {
-  const { data: filas } = await sb.from('kommo_config').select('clave, valor')
-  const cfg: Record<string, string> = {}
-  for (const fila of filas ?? []) cfg[fila.clave] = fila.valor
-
-  const base = `https://${cfg.subdominio}.kommo.com/api/v4`
-  const call = async (ruta: string, opciones: RequestInit = {}): Promise<any> => {
-    const res = await fetch(`${base}${ruta}`, {
-      ...opciones,
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(opciones.headers ?? {}) },
-    })
-    if (res.status === 204) return null
-    const cuerpo = await res.text()
-    if (!res.ok) throw new Error(`Kommo ${res.status}: ${cuerpo.slice(0, 300)}`)
-    return cuerpo ? JSON.parse(cuerpo) : null
-  }
-
-  const num = (clave: string) => Number(cfg[clave] || 0)
-  const telefono = `+57 ${pedido.celular}`
-
-  // ¿El cliente ya existe en Kommo? Se reutiliza para no duplicar contactos.
-  let contactId: number | null = null
-  try {
-    const encontrado = await call(`/contacts?query=${encodeURIComponent(telefono)}`)
-    contactId = encontrado?._embedded?.contacts?.[0]?.id ?? null
-  } catch {
-    contactId = null
-  }
-
-  if (!contactId) {
-    const creado = await call('/contacts', {
-      method: 'POST',
-      body: JSON.stringify([
-        {
-          name: pedido.nombre,
-          custom_fields_values: [
-            { field_id: num('cf_contacto_telefono'), values: [{ value: telefono }] },
-            { field_id: num('cf_contacto_email'), values: [{ value: pedido.correo }] },
-          ],
-        },
-      ]),
-    })
-    contactId = primerId(creado)
-  }
-
-  // Armar los campos de la venta
-  type Campo = { field_id: number; values: { value?: string; enum_id?: number }[] }
-  const campos: Campo[] = []
-  const rastreo: Campo[] = []
-
-  const conTexto = (lista: Campo[], clave: string, valor: string | number | null) => {
-    const id = num(clave)
-    if (id && valor !== null && valor !== '') lista.push({ field_id: id, values: [{ value: String(valor) }] })
-  }
-  const conOpcion = (claveCampo: string, claveOpcion: string) => {
-    const campo = num(claveCampo)
-    const opcion = num(claveOpcion)
-    if (campo && opcion) campos.push({ field_id: campo, values: [{ enum_id: opcion }] })
-  }
-
-  conTexto(campos, 'cf_nombre', pedido.nombre)
-  conTexto(campos, 'cf_celular', telefono)
-  conTexto(campos, 'cf_documento', pedido.documento)
-  conTexto(campos, 'cf_direccion', pedido.direccion)
-  conTexto(campos, 'cf_direccion2', pedido.direccion2)
-  conTexto(campos, 'cf_indicaciones', pedido.notas)
-  conTexto(campos, 'cf_ciudad', pedido.ciudad)
-  conTexto(campos, 'cf_municipio', pedido.ciudad)
-  conTexto(campos, 'cf_entrega', `${pedido.ciudad}, ${pedido.departamento}`)
-  conTexto(campos, 'cf_cantidad', pedido.cantidad)
-  conTexto(campos, 'cf_total', pedido.total_price)
-  conTexto(rastreo, 'cf_utm_source', pedido.utm_source)
-  conTexto(rastreo, 'cf_utm_medium', pedido.utm_medium)
-  conTexto(rastreo, 'cf_utm_campaign', pedido.utm_campaign)
-  conTexto(rastreo, 'cf_utm_content', pedido.utm_content)
-  conTexto(rastreo, 'cf_utm_term', pedido.utm_term)
-  conTexto(rastreo, 'cf_referrer', pedido.referrer)
-
-  conOpcion('cf_producto', `enum_producto_${pedido.cantidad}`)
-  conTexto(campos, 'cf_adiciones', `Protector solar x${pedido.cantidad}`)
-  conOpcion('cf_metodo_pago', pedido.metodoPago === 'Contra Entrega' ? 'enum_contraentrega' : 'enum_mercadopago')
-
-  const statusId =
-    pedido.metodoPago === 'Mercado Pago'
-      ? num('status_mercadopago')
-      : num(ETAPA_POR_CANTIDAD[pedido.cantidad] ?? 'status_contraentrega_1')
-
-  const base_venta = {
-    name: `${cfg.etiqueta_origen || 'Landing'} ${pedido.id} · ${pedido.cantidad} unidad${pedido.cantidad > 1 ? 'es' : ''} · ${pedido.ciudad}`,
-    price: pedido.total_price,
-    pipeline_id: num('pipeline_id'),
-    status_id: statusId,
-    responsible_user_id: num('responsible_user_id') || undefined,
-  }
-
-  let venta: any
-  try {
-    venta = await call('/leads', { method: 'POST', body: JSON.stringify([{ ...base_venta, custom_fields_values: [...campos, ...rastreo] }]) })
-  } catch (err) {
-    // Reintento sin los datos de rastreo: son los que Kommo suele rechazar
-    console.warn('Reintento sin rastreo:', err instanceof Error ? err.message : err)
-    venta = await call('/leads', { method: 'POST', body: JSON.stringify([{ ...base_venta, custom_fields_values: campos }]) })
-  }
-
-  const leadId = primerId(venta)
-  if (!leadId) throw new Error('Kommo no devolvió el número de la venta')
-
-  const leadIdNum = Number(leadId)
-
-  // Una automatización de Kommo borra a veces el campo "Medio De Pago" al
-  // crear la venta (lo escribimos, aparece y unos segundos después desaparece).
-  // Esperamos a que termine ese proceso y luego revisamos y reescribimos
-  // los campos importantes con PATCH (cuerpo de un solo objeto: el único
-  // formato que Kommo respeta en esta cuenta).
-  const dormir = (ms: number) => new Promise((res) => setTimeout(res, ms))
-  const requeridos = [
-    { campoId: num('cf_producto'), enumId: num(`enum_producto_${pedido.cantidad}`) },
-    {
-      campoId: num('cf_metodo_pago'),
-      enumId: pedido.metodoPago === 'Contra Entrega' ? num('enum_contraentrega') : num('enum_mercadopago'),
-    },
-  ]
-
-  await dormir(2500)
-  for (const req of requeridos) {
-    if (!req.campoId || !req.enumId) continue
-    for (let i = 0; i < 3; i++) {
-      const revisa = await call(`/leads/${leadIdNum}`)
-      const queda = (revisa?.custom_fields_values ?? []).some(
-        (c: any) => c.field_id === req.campoId && (c.values ?? []).some((v: any) => Number(v.enum_id) === req.enumId),
-      )
-      if (queda) break
-      await dormir(600)
-      await call(`/leads/${leadIdNum}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ id: leadIdNum, custom_fields_values: [{ field_id: req.campoId, values: [{ enum_id: req.enumId }] }] }),
-      })
-      await dormir(600)
-    }
-  }
-
-  const revisaFinal = await call(`/leads/${leadIdNum}`)
-  const confirma = (req: { campoId: number; enumId: number }) =>
-    !req.campoId || !req.enumId
-      ? true
-      : (revisaFinal?.custom_fields_values ?? []).some(
-          (c: any) => c.field_id === req.campoId && (c.values ?? []).some((v: any) => Number(v.enum_id) === req.enumId),
-        )
-  const camposPendientes = requeridos.filter((req) => !confirma(req))
-
-  // Enlazar el contacto: es lo mejor posible; Kommo a veces responde 500 y
-  // no se considera un error del pedido (los datos ya están en la venta).
-  if (contactId && leadIdNum) {
-    try {
-      await call(`/leads/${leadIdNum}/link`, {
-        method: 'POST',
-        body: JSON.stringify({ to_entity_id: contactId, to_entity_type: 'contact' }),
-      })
-    } catch (err) {
-      console.warn('No se pudo enlazar el contacto:', err instanceof Error ? err.message : err)
-    }
-  }
-
-  return {
-    leadId: leadIdNum,
-    contactId: contactId ? Number(contactId) : null,
-    camposPendientes,
-  }
-}
-
-// Al CREAR algo, Kommo responde con un arreglo plano: [{ "id": 123 }].
-// Al LEER, responde con { "_embedded": { "leads": [...] } }.
-// Aceptamos las dos formas para no depender de un solo formato.
-function primerId(respuesta: any): number | null {
-  if (!respuesta) return null
-  const directo = Array.isArray(respuesta) ? respuesta[0]?.id : respuesta?.id
-  if (directo) return Number(directo)
-  const embebido =
-    respuesta?._embedded?.leads?.[0]?.id ??
-    respuesta?._embedded?.contacts?.[0]?.id ??
-    null
-  return embebido ? Number(embebido) : null
-}

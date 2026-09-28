@@ -69,6 +69,10 @@ export type PedidoCreado = {
   orderId: string;
   numero?: number;
   total?: number;
+  // Mercado Pago: el link único creado para este pedido (si se pudo crear).
+  initPoint?: string | null;
+  // Mercado Pago: link fijo de repuesto (si no alcanzó a crearse el único).
+  mercadopagoUrl?: string;
 };
 
 export async function createOrder(datos: NuevoPedido): Promise<PedidoCreado> {
@@ -110,6 +114,40 @@ export function leerUtm(): Record<string, string> {
     if (valor) utm[clave] = valor.slice(0, 200);
   }
   return utm;
+}
+
+// ─── Confirmación de pagos de Mercado Pago ──────────────
+// "confirmar-pago" es la función del servidor que verifica el pago real
+// (webhook/notificación) y manda la venta a Kommo. Aquí solo la invocamos
+// en dos casos: la página de gracias (pago recién hecho) y el botón
+// "Confirmar pago" del panel de administrador.
+
+export type ResultadoConfirmacion = {
+  ok?: boolean;
+  error?: string;
+  orderId?: string;
+  estado?: string;
+  total?: number;
+  cantidad?: number;
+  cliente?: string;
+};
+
+export async function confirmarPagoPorPagoId(paymentId: string | number): Promise<ResultadoConfirmacion> {
+  if (!supabase) return { ok: false, error: 'Sin conexión' };
+  const { data, error } = await supabase.functions.invoke<ResultadoConfirmacion>('confirmar-pago', {
+    body: { paymentId: Number(paymentId) },
+  });
+  if (error || !data) return { ok: false, error: 'No se pudo confirmar el pago' };
+  return data;
+}
+
+export async function confirmarPedidoManual(orderId: string): Promise<ResultadoConfirmacion> {
+  if (!supabase) return { ok: false, error: 'Sin conexión' };
+  const { data, error } = await supabase.functions.invoke<ResultadoConfirmacion>('confirmar-pago', {
+    body: { orderId },
+  });
+  if (error || !data) return { ok: false, error: 'No se pudo confirmar el pedido' };
+  return data;
 }
 
 // ─── Catálogo de ofertas (precios) ────────────────────
