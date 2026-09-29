@@ -248,31 +248,59 @@ Deno.serve(async (req) => {
     referrer: guardado.referrer,
   }
 
-  // --- 5) Mercado Pago: pedido pendiente + link único de pago (sin Kommo)
+  // --- 5) Mercado Pago: pedido pendiente + link de pago + SIGUE Kommo
   if (esMercadoPago) {
+    let initPoint: string | null = null
     const mpToken = Deno.env.get('MP_TOKEN')
     if (mpToken) {
       try {
-        const { preferenciaId, initPoint } = await crearPreferenciaMP(mpToken, {
+        const { preferenciaId, initPoint: url } = await crearPreferenciaMP(mpToken, {
           id,
           total: pedido.total_price,
           producto: `Protector Solar Anthelios SPF 50+ x${pedido.cantidad}`,
           cantidad: pedido.cantidad,
         })
         await sb.from('pedidos').update({ mp_preferencia_id: preferenciaId || null }).eq('id', id)
-        if (initPoint) {
-          return json({ ok: true, orderId: id, numero: guardado.numero, total: guardado.total_price, initPoint, mercadopagoUrl: oferta.mercadopago_url || '' })
-        }
+        initPoint = url || null
       } catch (err) {
         // Sin link único: el cliente paga con el link fijo y el comerciante
         // confirma el pago a mano desde el panel.
         console.error('No se pudo crear la preferencia de Mercado Pago:', err instanceof Error ? err.message : err)
-        await sb.from('pedidos').update({ kommo_estado: 'error', kommo_error: `MP ${(err instanceof Error ? err.message : String(err)).slice(0, 500)}` }).eq('id', id)
-        await sb.from('sync_log').insert({ pedido_id: id, destino: 'mercadopago', estado: 'error', detalle: (err instanceof Error ? err.message : String(err)).slice(0, 500) })
+        await sb
+          .from('sync_log')
+          .insert({ pedido_id: id, destino: 'mercadopago', estado: 'error', detalle: (err instanceof Error ? err.message : String(err)).slice(0, 500) })
       }
     }
-    // Respuesta con link fijo como respaldo (botón en la página).
-    return json({ ok: true, orderId: id, numero: guardado.numero, total: guardado.total_price, initPoint: null, mercadopagoUrl: oferta.mercadopago_url || '' })
+
+    // El lead entra a Kommo de inmediato (etapa "Mercado pago") con el campo
+    // "Medio De Pago" = "Pendiente de pago", para poder hacer seguimiento
+    // mientras el cliente no pague. Cuando el pago se confirme, confirmar-pago
+    // cambia ese MISMO lead a "Medio De Pago" = "Mercado Pago".
+    try {
+      const { leadId, contactId, camposPendientes } = await enviarAKommo(sb, kommoToken, pedido, {
+        metodoPagoClave: 'enum_pendiente_pago',
+      })
+      const aviso = camposPendientes.length ? ` · OJO: campo de producto/medio de pago no confirmado por Kommo` : ''
+      await sb
+        .from('pedidos')
+        .update({
+          kommo_lead_id: leadId,
+          kommo_contact_id: contactId,
+          kommo_estado: camposPendientes.length ? 'enviado_con_aviso' : 'enviado',
+          kommo_enviado_en: new Date().toISOString(),
+        })
+        .eq('id', id)
+      await sb
+        .from('sync_log')
+        .insert({ pedido_id: id, destino: 'kommo', estado: 'ok', detalle: `Venta ${leadId} (medio de pago: pendiente)${aviso}` })
+    } catch (err) {
+      const detalle = err instanceof Error ? err.message : String(err)
+      console.error('Fallo al enviar a Kommo:', detalle)
+      await sb.from('pedidos').update({ kommo_estado: 'error', kommo_error: detalle.slice(0, 500) }).eq('id', id)
+      await sb.from('sync_log').insert({ pedido_id: id, destino: 'kommo', estado: 'error', detalle: detalle.slice(0, 500) })
+    }
+
+    return json({ ok: true, orderId: id, numero: guardado.numero, total: guardado.total_price, initPoint, mercadopagoUrl: oferta.mercadopago_url || '' })
   }
 
   // --- 6) Contra Entrega: enviar a Kommo

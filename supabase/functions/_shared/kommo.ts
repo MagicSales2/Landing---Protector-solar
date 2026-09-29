@@ -43,7 +43,12 @@ export type ResultadoKommo = {
   camposPendientes: { campoId: number; enumId: number }[]
 }
 
-export async function enviarAKommo(sb: SupabaseClient, token: string, pedido: ResumenPedido): Promise<ResultadoKommo> {
+export async function enviarAKommo(
+  sb: SupabaseClient,
+  token: string,
+  pedido: ResumenPedido,
+  opciones: { metodoPagoClave?: string } = {},
+): Promise<ResultadoKommo> {
   const { data: filas } = await sb.from('kommo_config').select('clave, valor')
   const cfg: Record<string, string> = {}
   for (const fila of filas ?? []) cfg[fila.clave] = fila.valor
@@ -121,14 +126,17 @@ export async function enviarAKommo(sb: SupabaseClient, token: string, pedido: Re
   conTexto(rastreo, 'cf_utm_term', pedido.utm_term)
   conTexto(rastreo, 'cf_referrer', pedido.referrer)
 
-  conOpcion('cf_producto', `enum_producto_${pedido.cantidad}`)
+  // Medio de pago: se puede pasar una opción distinta a la normal
+  // (ej. "Pendiente de pago" mientras Mercado Pago no ha confirmado).
+  const claveMetodo = opciones.metodoPagoClave || (pedido.metodoPago === 'Contra Entrega' ? 'enum_contraentrega' : 'enum_mercadopago')
   conTexto(campos, 'cf_adiciones', `Protector solar x${pedido.cantidad}`)
-  conOpcion('cf_metodo_pago', pedido.metodoPago === 'Contra Entrega' ? 'enum_contraentrega' : 'enum_mercadopago')
+  conOpcion('cf_producto', `enum_producto_${pedido.cantidad}`)
+  conOpcion('cf_metodo_pago', claveMetodo)
 
   const statusId =
-    pedido.metodoPago === 'Mercado Pago'
-      ? num('status_mercadopago')
-      : num(ETAPA_POR_CANTIDAD[pedido.cantidad] ?? 'status_contraentrega_1')
+    pedido.metodoPago === 'Contra Entrega'
+      ? num(ETAPA_POR_CANTIDAD[pedido.cantidad] ?? 'status_contraentrega_1')
+      : num('status_mercadopago')
 
   const base_venta = {
     name: `${cfg.etiqueta_origen || 'Landing'} ${pedido.id} · ${pedido.cantidad} unidad${pedido.cantidad > 1 ? 'es' : ''} · ${pedido.ciudad}`,
@@ -160,10 +168,7 @@ export async function enviarAKommo(sb: SupabaseClient, token: string, pedido: Re
   const dormir = (ms: number) => new Promise((res) => setTimeout(res, ms))
   const requeridos = [
     { campoId: num('cf_producto'), enumId: num(`enum_producto_${pedido.cantidad}`) },
-    {
-      campoId: num('cf_metodo_pago'),
-      enumId: pedido.metodoPago === 'Contra Entrega' ? num('enum_contraentrega') : num('enum_mercadopago'),
-    },
+    { campoId: num('cf_metodo_pago'), enumId: num(claveMetodo) },
   ]
 
   await dormir(2500)
@@ -216,6 +221,54 @@ export async function enviarAKommo(sb: SupabaseClient, token: string, pedido: Re
 // Al CREAR algo, Kommo responde con un arreglo plano: [{ "id": 123 }].
 // Al LEER, responde con { "_embedded": { "leads": [...] } }.
 // Aceptamos las dos formas para no depender de un solo formato.
+
+// Confirma el pago de un lead QUE YA EXISTE: no se crea otro, solo se cambia
+// el campo "Medio De Pago" de ese mismo lead (ej. de "Pendiente de pago" a
+// "Mercado Pago"). La automatización de Kommo puede borrar el campo, así que
+// se verifica y se reescribe si hace falta.
+export async function marcarMetodoPago(sb: SupabaseClient, token: string, leadId: number, claveMetodo: string): Promise<boolean> {
+  const { data: filas } = await sb.from('kommo_config').select('clave, valor')
+  const cfg: Record<string, string> = {}
+  for (const fila of filas ?? []) cfg[fila.clave] = fila.valor
+
+  const base = `https://${cfg.subdominio}.kommo.com/api/v4`
+  const campoId = Number(cfg['cf_metodo_pago'] || 0)
+  const enumId = Number(cfg[claveMetodo] || 0)
+  const leadIdNum = Number(leadId)
+  if (!campoId || !enumId || !leadIdNum) return false
+
+  const dormir = (ms: number) => new Promise((res) => setTimeout(res, ms))
+  const call = async (ruta: string, opciones: RequestInit = {}): Promise<any> => {
+    const res = await fetch(`${base}${ruta}`, {
+      ...opciones,
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(opciones.headers ?? {}) },
+    })
+    if (res.status === 204) return null
+    const cuerpo = await res.text()
+    if (!res.ok) throw new Error(`Kommo ${res.status}: ${cuerpo.slice(0, 300)}`)
+    return cuerpo ? JSON.parse(cuerpo) : null
+  }
+
+  const escribe = () =>
+    call(`/leads/${leadIdNum}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ id: leadIdNum, custom_fields_values: [{ field_id: campoId, values: [{ enum_id: enumId }] }] }),
+    })
+
+  await escribe()
+  for (let i = 0; i < 3; i++) {
+    const revisa = await call(`/leads/${leadIdNum}`)
+    const queda = (revisa?.custom_fields_values ?? []).some(
+      (c: any) => c.field_id === campoId && (c.values ?? []).some((v: any) => Number(v.enum_id) === enumId),
+    )
+    if (queda) return true
+    await dormir(600)
+    await escribe()
+    await dormir(600)
+  }
+  return false
+}
+
 export function primerId(respuesta: any): number | null {
   if (!respuesta) return null
   const directo = Array.isArray(respuesta) ? respuesta[0]?.id : respuesta?.id
