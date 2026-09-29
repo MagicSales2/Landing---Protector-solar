@@ -16,7 +16,7 @@
 
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { enviarAKommo, marcarMetodoPago, ResumenPedido } from '../_shared/kommo.ts'
-import { enviarTelegram } from '../_shared/telegram.ts'
+import { enviarTelegram, enlaceVentaKommo, etiquetaVentaKommo } from '../_shared/telegram.ts'
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -45,7 +45,7 @@ async function avisarPagoConfirmado(fila: any, kommoResumen: string) {
       `👤 ${fila.client_name}`,
       `📱 ${fila.client_phone}`,
       `📍 ${fila.city}${fila.department ? ', ' + fila.department : ''}`,
-      `💵 Mercado Pago — ${formatearCOP(Number(fila.total_price))} · ${fila.quantity} unidad(es)`,
+      `🧴 Protector Solar Anthelios SPF 50+ · ${fila.offer_name ?? ''} — ${formatearCOP(Number(fila.total_price))}`,
       kommoResumen,
     ].join('\n'),
   )
@@ -101,7 +101,7 @@ async function confirmar(sb: SupabaseClient, kommoToken: string, fila: any) {
         .from('sync_log')
         .insert({ pedido_id: id, destino: 'kommo', estado: ok ? 'ok' : 'aviso', detalle: `Lead ${fila.kommo_lead_id}: medio de pago → Mercado Pago` })
       kommoResumen = ok
-        ? `✅ Kommo: el lead ${fila.kommo_lead_id} quedó como "Mercado Pago"`
+        ? `✅ Kommo: <a href="${enlaceVentaKommo(fila.kommo_lead_id)}">lead ${fila.kommo_lead_id}</a> quedó como "Mercado Pago"`
         : '⚠️ Kommo: no confirmó el cambio de medio de pago'
     } catch (err) {
       const detalle = err instanceof Error ? err.message : String(err)
@@ -138,7 +138,7 @@ async function confirmar(sb: SupabaseClient, kommoToken: string, fila: any) {
         })
         .eq('id', id)
       await sb.from('sync_log').insert({ pedido_id: id, destino: 'kommo', estado: 'ok', detalle: `Venta ${leadId}${aviso}` })
-      kommoResumen = `✅ Kommo: venta ${leadId}`
+      kommoResumen = `✅ Kommo: ${etiquetaVentaKommo(leadId)}`
     } catch (err) {
       const detalle = err instanceof Error ? err.message : String(err)
       console.error('Fallo al enviar a Kommo:', detalle)

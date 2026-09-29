@@ -5,6 +5,16 @@
 //  Nunca rompe el flujo: si Telegram falla, se registra y el pedido sigue.
 // ============================================================================
 
+// Link directo para abrir una venta en Kommo (acceso rápido desde el chat).
+export function enlaceVentaKommo(leadId: number | string): string {
+  const subdominio = Deno.env.get('KOMMO_SUBDOMINIO') || 'magiapastelerta4'
+  return `https://${subdominio}.kommo.com/leads/list/${leadId}`
+}
+
+export function etiquetaVentaKommo(leadId: number | string): string {
+  return `<a href="${enlaceVentaKommo(leadId)}">venta ${leadId}</a>`
+}
+
 export async function enviarTelegram(texto: string): Promise<void> {
   const token = Deno.env.get('TELEGRAM_BOT_TOKEN')
   const chatId = Deno.env.get('TELEGRAM_CHAT_ID')

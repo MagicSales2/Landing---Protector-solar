@@ -16,7 +16,7 @@
 
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { enviarAKommo, ResumenPedido } from '../_shared/kommo.ts'
-import { enviarTelegram } from '../_shared/telegram.ts'
+import { enviarTelegram, etiquetaVentaKommo } from '../_shared/telegram.ts'
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -297,7 +297,7 @@ Deno.serve(async (req) => {
       await sb
         .from('sync_log')
         .insert({ pedido_id: id, destino: 'kommo', estado: 'ok', detalle: `Venta ${leadId} (medio de pago: pendiente)${aviso}` })
-      kommoResumen = camposPendientes.length ? `⚠️ Kommo: venta ${leadId} con campo pendiente de confirmar` : `✅ Kommo: venta ${leadId}`
+      kommoResumen = camposPendientes.length ? `⚠️ Kommo: ${etiquetaVentaKommo(leadId)} con campo pendiente de confirmar` : `✅ Kommo: ${etiquetaVentaKommo(leadId)}`
     } catch (err) {
       const detalle = err instanceof Error ? err.message : String(err)
       console.error('Fallo al enviar a Kommo:', detalle)
@@ -314,7 +314,7 @@ Deno.serve(async (req) => {
         `📱 ${celular}`,
         `📍 ${ciudad}${departamento ? ', ' + departamento : ''}`,
         `🏠 ${direccion}${direccion2 ? ' · ' + direccion2 : ''}`,
-        `📦 ${pedido.cantidad} unidad(es) — ${formatearCOP(pedido.total_price)}`,
+        `🧴 Protector Solar Anthelios SPF 50+ · ${oferta.nombre} — ${formatearCOP(pedido.total_price)}`,
         initPoint ? `🔗 <a href="${initPoint}">Abrir link de pago</a>` : '⚠️ Sin link único: pagará por el link fijo del comerciante',
         kommoResumen,
       ].join('\n'),
@@ -338,7 +338,7 @@ Deno.serve(async (req) => {
       })
       .eq('id', id)
     await sb.from('sync_log').insert({ pedido_id: id, destino: 'kommo', estado: 'ok', detalle: `Venta ${leadId}${aviso}` })
-    kommoResumen = camposPendientes.length ? `⚠️ Kommo: venta ${leadId} con campo pendiente de confirmar` : `✅ Kommo: venta ${leadId}`
+    kommoResumen = camposPendientes.length ? `⚠️ Kommo: ${etiquetaVentaKommo(leadId)} con campo pendiente de confirmar` : `✅ Kommo: ${etiquetaVentaKommo(leadId)}`
   } catch (err) {
     const detalle = err instanceof Error ? err.message : String(err)
     console.error('Fallo al enviar a Kommo:', detalle)
@@ -355,7 +355,7 @@ Deno.serve(async (req) => {
       `📱 ${celular}`,
       `📍 ${ciudad}${departamento ? ', ' + departamento : ''}`,
       `🏠 ${direccion}${direccion2 ? ' · ' + direccion2 : ''}`,
-      `📦 ${pedido.cantidad} unidad(es) — ${formatearCOP(pedido.total_price)}`,
+      `🧴 Protector Solar Anthelios SPF 50+ · ${oferta.nombre} — ${formatearCOP(pedido.total_price)}`,
       kommoResumen,
     ].join('\n'),
   )
