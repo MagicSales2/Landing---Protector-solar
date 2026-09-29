@@ -2,8 +2,14 @@
 import { createClient, SupabaseClient, AuthSession } from '@supabase/supabase-js';
 import { Order, OrderOffer } from '../types';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// URL y clave pública del proyecto. Son datos públicos por diseño: la clave
+// anónima solo permite crear pedidos y leer lo público. El build de GitHub las
+// inyecta por variables; el respaldo de abajo garantiza que CUALQUIER otro
+// build (local o el del VPS) quede funcionando igual.
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://drzbxmajsbkdkydsbjzj.supabase.co';
+const supabaseAnonKey =
+  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRyemJ4bWFqc2JrZGt5ZHNianpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA1OTczMTEsImV4cCI6MjEwNjE3MzMxMX0.N4w10n8DISA94g0SUe0ZjXLQwxdLnNIU56ZCZp22pYc';
 
 let supabase: SupabaseClient | null = null;
 let currentSession: AuthSession | null = null;
