@@ -68,6 +68,10 @@ export async function enviarAKommo(
   const num = (clave: string) => Number(cfg[clave] || 0)
   const telefono = `+57 ${pedido.celular}`
 
+  const camposContacto = [
+    { field_id: num('cf_contacto_telefono'), values: [{ value: telefono }] },
+    ...(pedido.correo ? [{ field_id: num('cf_contacto_email'), values: [{ value: pedido.correo }] }] : []),
+  ]
   // ¿El cliente ya existe en Kommo? Se reutiliza para no duplicar contactos.
   let contactId: number | null = null
   try {
@@ -77,18 +81,21 @@ export async function enviarAKommo(
     contactId = null
   }
 
-  if (!contactId) {
+  if (contactId) {
+    // Ya existía (mismo celular): igual se deja con el nombre y teléfono
+    // actuales, para que la tarjeta "contacto" siempre quede completa.
+    try {
+      await call(`/contacts/${contactId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ id: Number(contactId), name: pedido.nombre, custom_fields_values: camposContacto }),
+      })
+    } catch (err) {
+      console.warn('No se pudo actualizar el contacto existente:', err instanceof Error ? err.message : err)
+    }
+  } else {
     const creado = await call('/contacts', {
       method: 'POST',
-      body: JSON.stringify([
-        {
-          name: pedido.nombre,
-          custom_fields_values: [
-            { field_id: num('cf_contacto_telefono'), values: [{ value: telefono }] },
-            { field_id: num('cf_contacto_email'), values: [{ value: pedido.correo }] },
-          ],
-        },
-      ]),
+      body: JSON.stringify([{ name: pedido.nombre, custom_fields_values: camposContacto }]),
     })
     contactId = primerId(creado)
   }
@@ -146,13 +153,21 @@ export async function enviarAKommo(
     responsible_user_id: num('responsible_user_id') || undefined,
   }
 
+  // Adjuntar el contacto dentro de la venta: es la forma que sí funciona en
+  // esta cuenta (el endpoint /leads/{id}/link responde 500 siempre). Así la
+  // tarjeta de la venta queda con el chip del contacto y su nombre+celular.
+  const conContacto = contactId ? { _embedded: { contacts: [{ id: Number(contactId) }] } } : {}
+
   let venta: any
   try {
-    venta = await call('/leads', { method: 'POST', body: JSON.stringify([{ ...base_venta, custom_fields_values: [...campos, ...rastreo] }]) })
+    venta = await call('/leads', {
+      method: 'POST',
+      body: JSON.stringify([{ ...base_venta, ...conContacto, custom_fields_values: [...campos, ...rastreo] }]),
+    })
   } catch (err) {
     // Reintento sin los datos de rastreo: son los que Kommo suele rechazar
     console.warn('Reintento sin rastreo:', err instanceof Error ? err.message : err)
-    venta = await call('/leads', { method: 'POST', body: JSON.stringify([{ ...base_venta, custom_fields_values: campos }]) })
+    venta = await call('/leads', { method: 'POST', body: JSON.stringify([{ ...base_venta, ...conContacto, custom_fields_values: campos }]) })
   }
 
   const leadId = primerId(venta)
@@ -197,19 +212,6 @@ export async function enviarAKommo(
           (c: any) => c.field_id === req.campoId && (c.values ?? []).some((v: any) => Number(v.enum_id) === req.enumId),
         )
   const camposPendientes = requeridos.filter((req) => !confirma(req))
-
-  // Enlazar el contacto: es lo mejor posible; Kommo a veces responde 500 y
-  // no se considera un error del pedido (los datos ya están en la venta).
-  if (contactId && leadIdNum) {
-    try {
-      await call(`/leads/${leadIdNum}/link`, {
-        method: 'POST',
-        body: JSON.stringify({ to_entity_id: contactId, to_entity_type: 'contact' }),
-      })
-    } catch (err) {
-      console.warn('No se pudo enlazar el contacto:', err instanceof Error ? err.message : err)
-    }
-  }
 
   return {
     leadId: leadIdNum,
