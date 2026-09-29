@@ -165,7 +165,6 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
     setSuccessOrder(newOrder);
     setIsSubmitting(false);
     onOrderSuccess(newOrder);
-    window.scrollTo({ top: 120, behavior: 'smooth' });
   };
 
   const formatPrice = (p: number) => {
