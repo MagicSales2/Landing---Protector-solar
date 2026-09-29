@@ -16,6 +16,7 @@
 
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { enviarAKommo, ResumenPedido } from '../_shared/kommo.ts'
+import { enviarTelegram } from '../_shared/telegram.ts'
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -63,6 +64,8 @@ function generarId(): string {
   const rand = Math.random().toString(36).slice(2, 6).toUpperCase()
   return `PED-${String(ahora.getFullYear()).slice(2)}${mes}-${rand}`
 }
+
+const formatearCOP = (n: number) => '$ ' + n.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
 
 // Crea el "Checkout Pro" de Mercado Pago: un link único ligado a este pedido
 // (external_reference) para poder confirmar el pago cuando llegue la
@@ -276,6 +279,7 @@ Deno.serve(async (req) => {
     // "Medio De Pago" = "Pendiente de pago", para poder hacer seguimiento
     // mientras el cliente no pague. Cuando el pago se confirme, confirmar-pago
     // cambia ese MISMO lead a "Medio De Pago" = "Mercado Pago".
+    let kommoResumen = ''
     try {
       const { leadId, contactId, camposPendientes } = await enviarAKommo(sb, kommoToken, pedido, {
         metodoPagoClave: 'enum_pendiente_pago',
@@ -293,17 +297,34 @@ Deno.serve(async (req) => {
       await sb
         .from('sync_log')
         .insert({ pedido_id: id, destino: 'kommo', estado: 'ok', detalle: `Venta ${leadId} (medio de pago: pendiente)${aviso}` })
+      kommoResumen = camposPendientes.length ? `⚠️ Kommo: venta ${leadId} con campo pendiente de confirmar` : `✅ Kommo: venta ${leadId}`
     } catch (err) {
       const detalle = err instanceof Error ? err.message : String(err)
       console.error('Fallo al enviar a Kommo:', detalle)
       await sb.from('pedidos').update({ kommo_estado: 'error', kommo_error: detalle.slice(0, 500) }).eq('id', id)
       await sb.from('sync_log').insert({ pedido_id: id, destino: 'kommo', estado: 'error', detalle: detalle.slice(0, 500) })
+      kommoResumen = `⚠️ Kommo: ${detalle.slice(0, 160)}`
     }
+
+    await enviarTelegram(
+      [
+        '🔵 <b>Pedido Mercado Pago · esperando pago</b>',
+        `🧾 <code>${id}</code> · N.º ${guardado.numero ?? id}`,
+        `👤 ${nombre}`,
+        `📱 ${celular}`,
+        `📍 ${ciudad}${departamento ? ', ' + departamento : ''}`,
+        `🏠 ${direccion}${direccion2 ? ' · ' + direccion2 : ''}`,
+        `📦 ${pedido.cantidad} unidad(es) — ${formatearCOP(pedido.total_price)}`,
+        initPoint ? `🔗 <a href="${initPoint}">Abrir link de pago</a>` : '⚠️ Sin link único: pagará por el link fijo del comerciante',
+        kommoResumen,
+      ].join('\n'),
+    )
 
     return json({ ok: true, orderId: id, numero: guardado.numero, total: guardado.total_price, initPoint, mercadopagoUrl: oferta.mercadopago_url || '' })
   }
 
   // --- 6) Contra Entrega: enviar a Kommo
+  let kommoResumen = ''
   try {
     const { leadId, contactId, camposPendientes } = await enviarAKommo(sb, kommoToken, pedido)
     const aviso = camposPendientes.length ? ` · OJO: campo de producto/medio de pago no confirmado por Kommo` : ''
@@ -317,12 +338,27 @@ Deno.serve(async (req) => {
       })
       .eq('id', id)
     await sb.from('sync_log').insert({ pedido_id: id, destino: 'kommo', estado: 'ok', detalle: `Venta ${leadId}${aviso}` })
+    kommoResumen = camposPendientes.length ? `⚠️ Kommo: venta ${leadId} con campo pendiente de confirmar` : `✅ Kommo: venta ${leadId}`
   } catch (err) {
     const detalle = err instanceof Error ? err.message : String(err)
     console.error('Fallo al enviar a Kommo:', detalle)
     await sb.from('pedidos').update({ kommo_estado: 'error', kommo_error: detalle.slice(0, 500) }).eq('id', id)
     await sb.from('sync_log').insert({ pedido_id: id, destino: 'kommo', estado: 'error', detalle: detalle.slice(0, 500) })
+    kommoResumen = `⚠️ Kommo: ${detalle.slice(0, 160)}`
   }
+
+  await enviarTelegram(
+    [
+      '🛒 <b>Pedido nuevo · Contra Entrega</b>',
+      `🧾 <code>${id}</code> · N.º ${guardado.numero ?? id}`,
+      `👤 ${nombre}`,
+      `📱 ${celular}`,
+      `📍 ${ciudad}${departamento ? ', ' + departamento : ''}`,
+      `🏠 ${direccion}${direccion2 ? ' · ' + direccion2 : ''}`,
+      `📦 ${pedido.cantidad} unidad(es) — ${formatearCOP(pedido.total_price)}`,
+      kommoResumen,
+    ].join('\n'),
+  )
 
   return json({ ok: true, orderId: id, numero: guardado.numero, total: guardado.total_price })
 })

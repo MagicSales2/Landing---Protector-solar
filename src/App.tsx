@@ -28,6 +28,7 @@ import { PRODUCT_OFFERS as FALLBACK_OFFERS } from './data';
 import { Order, OrderOffer } from './types';
 import { motion } from 'motion/react';
 import { initTracking, trackPixelEvent } from './lib/tracking';
+import { iniciarRastreoVisitas } from './lib/visitas';
 import { getOfertas } from './lib/supabaseClient';
 
 // URL oculta para abrir el panel de administrador (sin botón visible).
@@ -72,6 +73,7 @@ export default function App() {
   useEffect(() => {
     initTracking();
     trackPixelEvent('ViewContent', { content_name: 'Landing Page Anthelios Ultra Dry Touch' });
+    iniciarRastreoVisitas();
   }, []);
 
   // Cargar precios reales desde la base de datos
