@@ -276,10 +276,12 @@ function escribirHoja1_(pedido, orderId) {
 
     var leadId = String(pedido['Lead Kommo'] || '').trim();
     if (idx['ID'] !== undefined) {
+      var celdaId = hoja1.getRange(fila, idx['ID'] + 1);
       if (leadId) {
-        hoja1.getRange(fila, idx['ID'] + 1).setFormula('=HYPERLINK("https://magiapastelerta4.kommo.com/leads/list2/' + leadId + '","' + leadId + '")');
-      } else if (String(hoja1.getRange(fila, idx['ID'] + 1).getValue()).trim() === '') {
-        hoja1.getRange(fila, idx['ID'] + 1).setValue('');
+        celdaId.setValue(leadId);
+        celdaId.setNote('https://magiapastelerta4.kommo.com/leads/list2/' + leadId);
+      } else if (String(celdaId.getValue()).trim() === '') {
+        celdaId.setValue('');
       }
     }
 
