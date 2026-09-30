@@ -50,11 +50,11 @@ var CABECERAS = [
 
 // Columnas de tu pestaña manual ("Hoja 1"). El sistema también escribe aquí,
 // con solo estos datos y el estado en su palabra correcta (nuevo / error / …).
-// La F es "Dpto / Ciudad": Ciudad y Departamento juntos en una sola celda
-// (ej. "Villavicencio, Meta"), como la organizaste.
+//   F = Ciudad y Departamento juntos en una celda (ej. "Villavicencio, Meta").
+//   G = el medio de pago (Wompi o Contra Entrega), con tu encabezado.
 var CABECERAS1 = [
   'Lead', 'Producto', 'ID', 'Dirección Entrega', 'Dirección 2',
-  'Dpto / Ciudad', 'Medio de Pago', 'Nombre Quien Recibe', 'Celular', 'Guia',
+  'Dpto / Ciudad', 'Contraentrega', 'Nombre Quien Recibe', 'Celular', 'Guia',
   'Transportadora', 'Costo domi', 'Estado',
 ];
 
@@ -323,7 +323,7 @@ function escribirHoja1_(pedido, orderId) {
     p('Dirección Entrega', pedido['Direccion']);
     p('Dirección 2', pedido['Direccion 2']);
     p('Dpto / Ciudad', ciudadYDepto);
-    p('Medio de Pago', pedido['Medio de pago']);
+    p('Contraentrega', pedido['Medio de pago']);
     p('Nombre Quien Recibe', pedido['Cliente']);
     p('Celular', pedido['Celular']);
     p('Guia', pedido['Guia num']);
