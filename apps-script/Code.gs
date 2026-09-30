@@ -270,10 +270,11 @@ function escribirHoja1_(pedido, orderId) {
     var unidad = cantidad === '1' ? 'unidad' : 'unidades';
     var etiqueta = 'Landing ' + orderId + ' · ' + cantidad + ' ' + unidad;
     if (ciudad) etiqueta += ' · ' + ciudad;
+    var producto = 'Protector solar x' + cantidad;
 
     var leadId = String(pedido['Lead Kommo'] || '').trim();
 
-    // Campo A (Lead): enlace a la venta en Kommo con el nombre del pedido.
+    // Campo A (Lead): enlace directo a la venta en Kommo con su nombre.
     if (idx['Lead'] !== undefined) {
       var celdaLead = hoja1.getRange(fila, idx['Lead'] + 1);
       if (leadId) {
@@ -286,7 +287,7 @@ function escribirHoja1_(pedido, orderId) {
           celdaLead.setRichTextValue(SpreadsheetApp.newRichTextValue().setText(etiqueta).setLinkUrl(urlLead).build());
         }
       } else {
-        celdaLead.setValue(orderId);
+        celdaLead.setValue(etiqueta);
       }
     }
 
@@ -294,7 +295,8 @@ function escribirHoja1_(pedido, orderId) {
       if (idx[cabecera] !== undefined && valor != null) hoja1.getRange(fila, idx[cabecera] + 1).setValue(valor);
     };
 
-    p('Producto', etiqueta);
+    // Campo B (Producto): protector solar x1/x2/x3.
+    p('Producto', producto);
     p('Dirección Entrega', pedido['Direccion']);
     p('Dirección 2', pedido['Direccion 2']);
     p('Medio de Pago', pedido['Medio de pago']);
@@ -304,14 +306,9 @@ function escribirHoja1_(pedido, orderId) {
     p('Transportadora', pedido['Guia carrier']);
     p('Costo domi', pedido['Total']);
 
+    // Campo C (ID): el nombre del lead.
     if (idx['ID'] !== undefined) {
-      var celdaId = hoja1.getRange(fila, idx['ID'] + 1);
-      if (leadId) {
-        celdaId.setValue(leadId);
-        celdaId.setNote('https://magiapastelerta4.kommo.com/leads/detail/' + leadId);
-      } else if (String(celdaId.getValue()).trim() === '') {
-        celdaId.setValue('');
-      }
+      hoja1.getRange(fila, idx['ID'] + 1).setValue(etiqueta);
     }
 
     if (idx['Estado'] !== undefined) hoja1.getRange(fila, idx['Estado'] + 1).setValue(estadoHoja1_(pedido));
