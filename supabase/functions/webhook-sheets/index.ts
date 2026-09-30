@@ -61,7 +61,6 @@ function mapearEstado(texto: string): { db: string; claveEtapa: string; mover: b
     case 'ventas perdidas':
       return { db: 'cancelled', claveEtapa: 'status_cancelado', mover: true }
     case 'wompi':
-    case 'mercado pago':
       return { db: 'pagado', claveEtapa: 'status_pago_online', mover: true }
     case 'nuevo':
     case 'pagado':
