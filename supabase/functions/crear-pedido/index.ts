@@ -279,7 +279,8 @@ Deno.serve(async (req) => {
     // pago" (esperando el pago), con el campo "Medio De Pago" = "Pendiente de
     // pago". Cuando el pago se confirme, confirmar-pago mueve ese MISMO lead a la
     // etapa "Mercado pago" (y el campo pasa a "Mercado Pago").
-    let kommoResumen = ''
+    // (No se avisa por Telegram todavía: solo se avisa cuando el pago se
+    // confirma, así el dueño no se llena de ruido con pedidos sin pagar.)
     try {
       const { leadId, contactId, camposPendientes } = await enviarAKommo(sb, kommoToken, pedido, {
         metodoPagoClave: 'enum_pendiente_pago',
@@ -299,28 +300,12 @@ Deno.serve(async (req) => {
       await sb
         .from('sync_log')
         .insert({ pedido_id: id, destino: 'kommo', estado: 'ok', detalle: `Venta ${leadId} (medio de pago: pendiente)${aviso}` })
-      kommoResumen = camposPendientes.length ? `⚠️ Kommo: ${etiquetaVentaKommo(leadId)} con campo pendiente de confirmar` : `✅ Kommo: ${etiquetaVentaKommo(leadId)}`
     } catch (err) {
       const detalle = err instanceof Error ? err.message : String(err)
       console.error('Fallo al enviar a Kommo:', detalle)
       await sb.from('pedidos').update({ kommo_estado: 'error', kommo_error: detalle.slice(0, 500) }).eq('id', id)
       await sb.from('sync_log').insert({ pedido_id: id, destino: 'kommo', estado: 'error', detalle: detalle.slice(0, 500) })
-      kommoResumen = `⚠️ Kommo: ${detalle.slice(0, 160)}`
     }
-
-    await enviarTelegram(
-      [
-        '🔵 <b>Pedido Mercado Pago · esperando pago</b>',
-        `🧾 <code>${id}</code> · N.º ${guardado.numero ?? id}`,
-        `👤 ${nombre}`,
-        `📱 ${celular}`,
-        `📍 ${ciudad}${departamento ? ', ' + departamento : ''}`,
-        `🏠 ${direccion}${direccion2 ? ' · ' + direccion2 : ''}`,
-        `🧴 Protector Solar Anthelios SPF 50+ · ${oferta.nombre} — ${formatearCOP(pedido.total_price)}`,
-        initPoint ? `🔗 <a href="${initPoint}">Abrir link de pago</a>` : '⚠️ Sin link único: pagará por el link fijo del comerciante',
-        kommoResumen,
-      ].join('\n'),
-    )
 
     return json({ ok: true, orderId: id, numero: guardado.numero, total: guardado.total_price, initPoint, mercadopagoUrl: oferta.mercadopago_url || '' })
   }
