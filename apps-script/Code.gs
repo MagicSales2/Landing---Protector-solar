@@ -35,7 +35,7 @@ var CONFIG = {
 
 // Cada vez que publiques una versión nueva, cambia este número por +1
 // (v3, v4, ...). Sirve para verificar desde el servidor cuál está activa.
-var VERSION = 'v6';
+var VERSION = 'v7';
 
 // Columnas que el sistema conoce y mantiene sincronizadas.
 var CABECERAS = [
