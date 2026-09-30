@@ -17,6 +17,7 @@
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { enviarAKommo, ResumenPedido } from '../_shared/kommo.ts'
 import { enviarTelegram, etiquetaVentaKommo } from '../_shared/telegram.ts'
+import { generarGuiaPedido } from '../_shared/envia.ts'
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -312,8 +313,10 @@ Deno.serve(async (req) => {
 
   // --- 6) Contra Entrega: enviar a Kommo
   let kommoResumen = ''
+  let leadIdEnviado: number | null = null
   try {
     const { leadId, contactId, camposPendientes } = await enviarAKommo(sb, kommoToken, pedido)
+    leadIdEnviado = leadId
     const aviso = camposPendientes.length ? ` · OJO: campo de producto/medio de pago no confirmado por Kommo` : ''
     await sb
       .from('pedidos')
@@ -334,6 +337,40 @@ Deno.serve(async (req) => {
     kommoResumen = `⚠️ Kommo: ${detalle.slice(0, 160)}`
   }
 
+  // --- 7) Guía de envío. En Contra Entrega se genera al llegar el pedido
+  // (solo se cobra cuando la transportadora recibe el paquete). La más
+  // económica gana; en caso de fallo se avisa por Telegram pero el pedido
+  // sigue su curso.
+  let guiaResumen = ''
+  let guiaRespuesta: { ok: boolean; numero?: string; carrier?: string; costo?: number } | null = null
+  const enviaToken = Deno.env.get('ENVIA_TOKEN') || ''
+  try {
+    const resGuia = await generarGuiaPedido(sb, enviaToken, kommoToken, {
+      id,
+      numero: guardado.numero,
+      client_name: nombre,
+      client_phone: celular,
+      city: ciudad,
+      department: departamento,
+      address: direccion,
+      address2: direccion2,
+      notes: notas,
+      quantity: oferta.cantidad,
+      total_price: pedido.total_price,
+      kommo_lead_id: leadIdEnviado,
+    }, true)
+    if (resGuia.omitido) {
+      guiaResumen = '📦 Guía: Envia.com no está activado'
+    } else if (resGuia.ok) {
+      guiaResumen = `📦 Guía: ${resGuia.carrier} · № ${resGuia.numero}${resGuia.kommoOk ? ' · link en Kommo 📎' : ''}`
+      guiaRespuesta = { ok: true, numero: resGuia.numero, carrier: resGuia.carrier, costo: resGuia.costo }
+    } else {
+      guiaResumen = `📦 Guía: ⚠️ no se pudo crear (${resGuia.error ?? 'error'})`
+    }
+  } catch (err) {
+    guiaResumen = `📦 Guía: ⚠️ ${err instanceof Error ? err.message : String(err)}`
+  }
+
   await enviarTelegram(
     [
       '🛒 <b>Pedido nuevo · Contra Entrega</b>',
@@ -344,8 +381,9 @@ Deno.serve(async (req) => {
       `🏠 ${direccion}${direccion2 ? ' · ' + direccion2 : ''}`,
       `🧴 Protector Solar Anthelios SPF 50+ · ${oferta.nombre} — ${formatearCOP(pedido.total_price)}`,
       kommoResumen,
+      guiaResumen,
     ].join('\n'),
   )
 
-  return json({ ok: true, orderId: id, numero: guardado.numero, total: guardado.total_price })
+  return json({ ok: true, orderId: id, numero: guardado.numero, total: guardado.total_price, guia: guiaRespuesta })
 })

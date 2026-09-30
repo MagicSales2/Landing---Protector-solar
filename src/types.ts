@@ -17,6 +17,11 @@ export interface Order {
   date: string;
   synced?: boolean;
   paymentMethod?: string;
+  guiaLink?: string;
+  guiaNumero?: string;
+  guiaCarrier?: string;
+  guiaEstado?: string;
+  guiaError?: string;
 }
 
 export interface Review {

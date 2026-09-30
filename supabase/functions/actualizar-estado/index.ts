@@ -12,6 +12,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { moverLeadAEstado } from '../_shared/kommo.ts'
 import { enviarTelegram, enlaceVentaKommo } from '../_shared/telegram.ts'
+import { cancelarGuia } from '../_shared/envia.ts'
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -69,12 +70,36 @@ Deno.serve(async (req) => {
 
   const { data: fila, error } = await sb
     .from('pedidos')
-    .select('id, client_name, client_phone, city, total_price, offer_name, kommo_lead_id, status, numero')
+    .select('id, client_name, client_phone, city, total_price, offer_name, kommo_lead_id, status, numero, guia_numero, guia_carrier, guia_estado')
     .eq('id', orderId)
     .maybeSingle()
   if (error || !fila) return json({ error: 'Pedido no encontrado' }, 404)
 
   await sb.from('pedidos').update({ status: nuevoEstado }).eq('id', orderId)
+
+  // Pedido cancelado: se cancela la guía de envío si existía y todavía estaba
+  // activa (no ha sido recogida por la transportadora, así que no se cobra).
+  let cancelacionGuia = ''
+  if (nuevoEstado === 'cancelled' && fila.guia_numero && fila.guia_estado !== 'cancelada') {
+    const enviaToken = Deno.env.get('ENVIA_TOKEN') || ''
+    const carrier = String(fila.guia_carrier ?? '').split(' · ')[0]
+    const resultado = await cancelarGuia(enviaToken, carrier, String(fila.guia_numero))
+    const cancelada = resultado && !/error|no pudo|cannot|couldn't|invalid|not found/i.test(resultado)
+    await sb
+      .from('pedidos')
+      .update({ guia_estado: cancelada ? 'cancelada' : 'cancel_error', guia_error: cancelada ? null : String(resultado).slice(0, 500) })
+      .eq('id', orderId)
+    await sb.from('sync_log').insert({
+      pedido_id: orderId,
+      destino: 'envia',
+      estado: cancelada ? 'ok' : 'error',
+      detalle: cancelada ? `Guía ${fila.guia_numero} cancelada` : `No se pudo cancelar la guía ${fila.guia_numero}: ${resultado ?? 'sin respuesta'}`,
+    })
+    cancelacionGuia = cancelada ? `✅ Guía ${fila.guia_numero} cancelada` : `⚠️ Guía ${fila.guia_numero}: hubo problema al cancelar (revisala)`
+    if (!cancelada) {
+      await enviarTelegram(`🚨 <b>Alerta:</b> el pedido <code>${orderId}</code> se canceló pero su guía (${fila.guia_numero}, ${fila.guia_carrier ?? carrier}) no se pudo cancelar en Envia.com: ${String(resultado).slice(0, 160)}. Revisala para que no la cobren.`)
+    }
+  }
 
   let kommoMovido = false
   let kommoMensaje = ''
@@ -131,5 +156,6 @@ Deno.serve(async (req) => {
     estado: nuevoEstado,
     kommoMovido,
     kommoMensaje,
+    cancelacionGuia,
   })
 })

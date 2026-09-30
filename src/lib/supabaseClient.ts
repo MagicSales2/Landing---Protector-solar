@@ -219,11 +219,11 @@ export async function updateOrderStatusInSupabase(orderId: string, status: strin
 
 // Cambia el estado desde el panel y, si el estado es "shipped", mueve también
 // la venta en Kommo a la etapa "Enviado" (dispara el WhatsApp con la guía).
-// Devuelve { ok, error?, kommoMovido?, kommoMensaje? }.
+// Devuelve { ok, error?, kommoMovido?, kommoMensaje?, cancelacionGuia? }.
 export async function actualizarEstadoPedido(
   orderId: string,
   status: string,
-): Promise<{ ok: boolean; error?: string; kommoMovido?: boolean; kommoMensaje?: string }> {
+): Promise<{ ok: boolean; error?: string; kommoMovido?: boolean; kommoMensaje?: string; cancelacionGuia?: string }> {
   if (!supabase) return { ok: false, error: 'Sin conexión con la base de datos.' };
   const { data, error } = await supabase.functions.invoke('actualizar-estado', { body: { orderId, status } });
   if (error || !data?.ok) {
@@ -270,6 +270,11 @@ function mapRowToOrder(row: any): Order {
     date: row.created_at,
     synced: row.kommo_estado === 'enviado' || row.kommo_estado === 'enviado_con_aviso',
     paymentMethod: row.payment_method,
+    guiaLink: row.guia_link || undefined,
+    guiaNumero: row.guia_numero || undefined,
+    guiaCarrier: row.guia_carrier || undefined,
+    guiaEstado: row.guia_estado || undefined,
+    guiaError: row.guia_error || undefined,
   };
 }
 

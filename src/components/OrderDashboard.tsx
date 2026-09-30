@@ -84,6 +84,8 @@ export default function OrderDashboard({ ordersUpdatedToggle, onOrderDelete, isO
       } else if (res.kommoMensaje) {
         alert(res.kommoMensaje.replace(/<[^>]+>/g, ''));
       }
+    } else if (newStatus === 'cancelled' && res.cancelacionGuia) {
+      mostrarAviso(res.cancelacionGuia.replace(/<[^>]+>/g, ''), res.cancelacionGuia.startsWith('✅') ? 'ok' : 'info');
     }
   };
 
@@ -316,6 +318,7 @@ export default function OrderDashboard({ ordersUpdatedToggle, onOrderDelete, isO
                       <th className="px-4 py-3">Dirección</th>
                       <th className="px-4 py-3">Oferta</th>
                       <th className="px-4 py-3">Total</th>
+                      <th className="px-4 py-3">Guía</th>
                       <th className="px-4 py-3">Estado</th>
                       <th className="px-4 py-3 text-right">Acción</th>
                     </tr>
@@ -384,6 +387,38 @@ export default function OrderDashboard({ ordersUpdatedToggle, onOrderDelete, isO
                         </td>
                         <td className="px-4 py-3 font-black text-slate-950 whitespace-nowrap">
                           {formatPrice(o.totalPrice)}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {o.guiaLink ? (
+                            <a
+                              href={o.guiaLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 hover:text-emerald-800 border border-emerald-200 bg-emerald-50 px-2 py-1 rounded-md"
+                              title={`Abrir seguimiento de la guía ${o.guiaNumero ?? ''}`}
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              {o.guiaNumero || 'Seguimiento'}
+                            </a>
+                          ) : (
+                            <span
+                              className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded border ${
+                                o.guiaEstado === 'error'
+                                  ? 'bg-red-50 text-red-500 border-red-100'
+                                  : o.guiaEstado === 'cancelada'
+                                    ? 'bg-slate-50 text-slate-400 border-slate-200'
+                                    : 'bg-slate-100 text-slate-400 border-slate-200'
+                              }`}
+                              title={o.guiaError || `Estado de la guía: ${o.guiaEstado ?? 'sin guía'}`}
+                            >
+                              {o.guiaEstado === 'error' ? 'Error en guía' : o.guiaEstado === 'cancelada' ? 'Guía cancelada' : 'Sin guía'}
+                            </span>
+                          )}
+                          {o.guiaCarrier && (
+                            <p className="text-[10px] text-slate-400 mt-0.5 truncate max-w-[140px]" title={o.guiaCarrier}>
+                              {o.guiaCarrier}
+                            </p>
+                          )}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           <select
