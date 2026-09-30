@@ -22,7 +22,7 @@ const CORS_HEADERS = {
 }
 
 const COLUMNAS_PEDIDO =
-  'id, numero, client_name, client_phone, client_email, document_id, department, city, address, address2, notes, offer_name, quantity, total_price, payment_method, utm_source, utm_medium, utm_campaign, utm_content, utm_term, referrer, status, kommo_estado, kommo_lead_id, kommo_contact_id, mp_preferencia_id, guia_numero, guia_estado, guia_error'
+  'id, numero, client_name, client_phone, client_email, document_id, department, city, address, address2, notes, offer_name, quantity, total_price, payment_method, utm_source, utm_medium, utm_campaign, utm_content, utm_term, referrer, status, kommo_estado, kommo_lead_id, kommo_contact_id, wompi_payment_link_id, guia_numero, guia_estado, guia_error'
 
 function json(cuerpo: unknown, estado = 200) {
   return new Response(JSON.stringify(cuerpo), {
@@ -64,30 +64,20 @@ async function reintentarKommo(sb: any, kommoToken: string, fila: any): Promise<
   }
 
   const pedido = aPedido(fila)
-  // Opciones según el medio y el estado: Mercado Pago pagado → su etapa final;
-  // Mercado Pago pendiente → etapa pendiente con su link de pago; contra
-  // entrega → la etapa por defecto.
+  // Opciones según el medio y el estado: pago online ya pagado → su etapa
+  // final; pago online pendiente → etapa pendiente con su link de pago de
+  // Wompi; contra entrega → la etapa por defecto.
   const opciones: any = {}
-  if (fila.payment_method === 'Mercado Pago') {
+  if (fila.payment_method !== 'Contra Entrega') {
     if (fila.status === 'pagado') {
       opciones.metodoPagoClave = 'enum_mercadopago'
       opciones.statusClave = 'status_mercadopago'
     } else {
       opciones.metodoPagoClave = 'enum_pendiente_pago'
       opciones.statusClave = 'status_mercadopago_pendiente'
-      const mpToken = Deno.env.get('MP_TOKEN')
-      const prefId = fila.mp_preferencia_id
-      if (mpToken && prefId) {
-        try {
-          const r = await fetch(`https://api.mercadopago.com/checkout/preferences/${prefId}`, {
-            headers: { Authorization: `Bearer ${mpToken}` },
-          })
-          const pref = await r.json()
-          const url = String(pref?.init_point || pref?.sandbox_init_point || '')
-          if (url) opciones.linkPago = url
-        } catch (err) {
-          console.warn('No se pudo recuperar el link de pago del reintento:', err instanceof Error ? err.message : err)
-        }
+      // El link de Wompi se reconstruye desde el id guardado en el pedido.
+      if (fila.wompi_payment_link_id) {
+        opciones.linkPago = `https://checkout.wompi.co/l/${fila.wompi_payment_link_id}`
       }
     }
   }
@@ -120,8 +110,8 @@ async function reintentarKommo(sb: any, kommoToken: string, fila: any): Promise<
   }
 }
 
-// Reintenta crear la guía de envío (si no se pudo). Contra Entrega y Mercado
-// Pago pagado generan guía; un MP pendiente todavía no.
+// Reintenta crear la guía de envío (si no se pudo). Contra Entrega y el pago
+// online ya pagado generan guía; un pago pendiente todavía no.
 async function reintentarGuia(sb: any, fila: any): Promise<{ estado: string; detalle: string }> {
   const enviaToken = Deno.env.get('ENVIA_TOKEN') || ''
   if (!enviaToken) return { estado: 'error', detalle: 'Envia.com no configurado (falta ENVIA_TOKEN)' }
@@ -132,12 +122,14 @@ async function reintentarGuia(sb: any, fila: any): Promise<{ estado: string; det
   if (fila.guia_estado === 'cancelada') {
     return { estado: 'sin_accion', detalle: 'La guía fue cancelada (pedido cancelado)' }
   }
-  if (fila.payment_method === 'Mercado Pago' && fila.status !== 'pagado') {
+  if (fila.payment_method !== 'Contra Entrega' && fila.status !== 'pagado') {
     return { estado: 'sin_accion', detalle: 'Guía se creará cuando el pago esté confirmado' }
   }
 
   const kommoToken = Deno.env.get('KOMMO_TOKEN') || ''
-  const conRecaudo = fila.payment_method !== 'Mercado Pago'
+  // Solo la contra entrega lleva recaudo: si el pago ya se hizo en línea, la
+  // guía va sin cobrar.
+  const conRecaudo = fila.payment_method === 'Contra Entrega'
   try {
     const res = await generarGuiaPedido(sb, enviaToken, kommoToken, fila, conRecaudo)
     if (res.ok) {

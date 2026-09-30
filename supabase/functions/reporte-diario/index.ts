@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
     if (p.payment_method === 'Contra Entrega' && p.status !== 'cancelled') {
       ceVenta += 1
       ceTotal += total
-    } else if (p.payment_method === 'Mercado Pago') {
+    } else if (p.payment_method !== 'Contra Entrega') {
       if (p.status === 'pagado') {
         mpPagados += 1
         mpTotal += total

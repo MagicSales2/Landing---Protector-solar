@@ -107,10 +107,10 @@ export default function OrderDashboard({ ordersUpdatedToggle, onOrderDelete, isO
     window.setTimeout(() => setAviso(null), 8000);
   };
 
-  // Confirma a mano un pedido de Mercado Pago (cuando ya llegó la plata y el
-  // sistema no lo detectó solo). Recién ahí manda la venta a Kommo.
+  // Confirma a mano un pedido pagado en línea (cuando la plata ya llegó pero
+  // el webhook de Wompi no pudo registrarlo). Recién ahí manda la venta a Kommo.
   const handleConfirmarPago = async (id: string) => {
-    if (!confirm('¿Confirmas que este pedido YA fue pagado con Mercado Pago?')) return;
+    if (!confirm('¿Confirmas que este pedido YA fue pagado por Wompi?')) return;
     setConfirmando(id);
     try {
       const res = await confirmarPedidoManual(id);
@@ -472,7 +472,7 @@ export default function OrderDashboard({ ordersUpdatedToggle, onOrderDelete, isO
                           </select>
                         </td>
                         <td className="px-4 py-3 text-right whitespace-nowrap">
-                          {o.paymentMethod && o.paymentMethod.includes('Mercado') && o.status === 'pendiente_pago' && (
+                          {o.paymentMethod && !o.paymentMethod.includes('Contra') && o.status === 'pendiente_pago' && (
                             <button
                               onClick={() => handleConfirmarPago(o.id)}
                               disabled={confirmando === o.id}

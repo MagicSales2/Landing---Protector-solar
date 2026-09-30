@@ -75,7 +75,7 @@ export async function resumenVentas(sb: SupabaseClient, inicioIso: string, finIs
       }
       if (p.status !== 'cancelled') r.ceSuma += total
       if (p.status !== 'delivered' && p.status !== 'cancelled') r.cePorCobrar += 1
-    } else if (p.payment_method === 'Mercado Pago') {
+    } else if (p.payment_method !== 'Contra Entrega') {
       if (p.status === 'pendiente_pago') r.mpPendientes += 1
       if (p.status === 'pagado') {
         r.mpPagados += 1

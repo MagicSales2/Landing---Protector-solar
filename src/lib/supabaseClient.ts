@@ -66,7 +66,7 @@ export type NuevoPedido = {
   address2?: string;
   notes?: string;
   offerId: string;
-  paymentMethod: 'Contra Entrega' | 'Mercado Pago';
+  paymentMethod: 'Contra Entrega' | 'Wompi';
   website?: string; // trampa para robots
 };
 
@@ -75,10 +75,8 @@ export type PedidoCreado = {
   orderId: string;
   numero?: number;
   total?: number;
-  // Mercado Pago: el link único creado para este pedido (si se pudo crear).
+  // Wompi: el link único de pago creado para este pedido (si se pudo crear).
   initPoint?: string | null;
-  // Mercado Pago: link fijo de repuesto (si no alcanzó a crearse el único).
-  mercadopagoUrl?: string;
 };
 
 export async function createOrder(datos: NuevoPedido): Promise<PedidoCreado> {
@@ -122,11 +120,12 @@ export function leerUtm(): Record<string, string> {
   return utm;
 }
 
-// ─── Confirmación de pagos de Mercado Pago ──────────────
-// "confirmar-pago" es la función del servidor que verifica el pago real
-// (webhook/notificación) y manda la venta a Kommo. Aquí solo la invocamos
-// en dos casos: la página de gracias (pago recién hecho) y el botón
-// "Confirmar pago" del panel de administrador.
+// ─── Confirmación de pagos (Wompi) ─────────────────────
+// El pago online lo confirma Wompi por webhook (confirmar-pago-wompi), que
+// manda la venta a Kommo. Desde el navegador solo:
+//   - se consulta el estado del pedido (página de gracias, para esperar la
+//     confirmación sin recargar)
+//   - se confirma a mano un pago (botón del panel de administrador)
 
 export type ResultadoConfirmacion = {
   ok?: boolean;
@@ -138,13 +137,19 @@ export type ResultadoConfirmacion = {
   cliente?: string;
 };
 
-export async function confirmarPagoPorPagoId(paymentId: string | number): Promise<ResultadoConfirmacion> {
+export async function consultarPago(orderId: string): Promise<ResultadoConfirmacion> {
   if (!supabase) return { ok: false, error: 'Sin conexión' };
-  const { data, error } = await supabase.functions.invoke<ResultadoConfirmacion>('confirmar-pago', {
-    body: { paymentId: Number(paymentId) },
-  });
-  if (error || !data) return { ok: false, error: 'No se pudo confirmar el pago' };
-  return data;
+  try {
+    const res = await fetch(`${supabaseUrl}/functions/v1/confirmar-pago-wompi?pedido=${encodeURIComponent(orderId)}`, {
+      method: 'GET',
+      headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${supabaseAnonKey}` },
+    });
+    const data = await res.json();
+    if (!res.ok) return { ok: false, error: 'No se pudo consultar el pago' };
+    return data as ResultadoConfirmacion;
+  } catch {
+    return { ok: false, error: 'No se pudo consultar el pago' };
+  }
 }
 
 export async function confirmarPedidoManual(orderId: string): Promise<ResultadoConfirmacion> {
@@ -162,7 +167,7 @@ export async function getOfertas(): Promise<OrderOffer[] | null> {
   if (!supabase) return null;
   const { data, error } = await supabase
     .from('ofertas')
-    .select('id, nombre, cantidad, precio, mercadopago_url, activo')
+    .select('id, nombre, cantidad, precio, activo')
     .eq('activo', true)
     .order('cantidad', { ascending: true });
   if (error || !data || data.length === 0) return null;
@@ -187,7 +192,6 @@ export async function getOfertas(): Promise<OrderOffer[] | null> {
       // La segunda oferta (2 unidades) es la recomendada, como en el diseño original.
       isPopular: i === 1,
       quantity: cantidad,
-      mercadopagoUrl: o.mercadopago_url || '',
     };
   });
 }

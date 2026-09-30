@@ -53,6 +53,32 @@ async function checksumValido(evento: any, secret: string): Promise<boolean> {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS })
+
+  const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
+    auth: { persistSession: false },
+  })
+
+  // ── Consulta de estado (GET ?pedido=PED-...) ────────────────────────────
+  // La usa la página de gracias para mostrarle al cliente si su pago ya
+  // quedó confirmado. Solo LEE: nunca confirma pagos (eso es del webhook).
+  if (req.method === 'GET') {
+    const pedidoId = new URL(req.url).searchParams.get('pedido')?.trim() || ''
+    if (!pedidoId) return json({ ok: false, error: 'Falta el pedido' }, 400)
+    const { data: fila } = await sb
+      .from('pedidos')
+      .select('id, status, payment_method, total_price, client_name')
+      .eq('id', pedidoId)
+      .maybeSingle()
+    if (!fila) return json({ ok: false, estado: 'no_encontrado' }, 404)
+    return json({
+      ok: fila.status === 'pagado',
+      orderId: fila.id,
+      estado: fila.status,
+      total: Number(fila.total_price),
+      cliente: fila.client_name,
+    })
+  }
+
   if (req.method !== 'POST') return json({ error: 'Método no permitido' }, 405)
 
   const kommoToken = Deno.env.get('KOMMO_TOKEN')
@@ -61,10 +87,6 @@ Deno.serve(async (req) => {
     console.error('Faltan secretos (KOMMO_TOKEN o WOMPI_EVENT_SECRET)')
     return json({ error: 'La función no está configurada todavía' }, 500)
   }
-
-  const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
-    auth: { persistSession: false },
-  })
 
   // Cuerpo crudo: hace falta para validar la firma sin alterarlo.
   const crudo = await req.text()

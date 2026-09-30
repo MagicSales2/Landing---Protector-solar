@@ -15,7 +15,7 @@ export function estadoSheets(fila: any): string {
     case 'pendiente_pago':
       return 'espera de pago'
     case 'pagado':
-      return fila.payment_method === 'Mercado Pago' ? 'mercado pago' : 'pagado'
+      return 'pagado'
     case 'confirmed':
       return 'impreso'
     case 'shipped':

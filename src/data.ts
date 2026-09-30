@@ -87,8 +87,7 @@ export const PRODUCT_OFFERS: OrderOffer[] = [
     subtitle: "Protección diaria esencial",
     price: 84900,
     isPopular: false,
-    quantity: 1,
-    mercadopagoUrl: "https://mpago.li/2SqfiSu"
+    quantity: 1
   },
   {
     id: "offer-2",
@@ -98,7 +97,6 @@ export const PRODUCT_OFFERS: OrderOffer[] = [
     savings: 19900,
     isPopular: true,
     quantity: 2,
-    mercadopagoUrl: "https://mpago.li/134J7Me"
   },
   {
     id: "offer-3",
@@ -108,6 +106,5 @@ export const PRODUCT_OFFERS: OrderOffer[] = [
     savings: 44800,
     isPopular: false,
     quantity: 3,
-    mercadopagoUrl: "https://mpago.li/2bMXi46"
   }
 ];

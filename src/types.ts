@@ -50,7 +50,6 @@ export interface OrderOffer {
   savings?: number;
   isPopular?: boolean;
   quantity: number;
-  mercadopagoUrl?: string;
 }
 
 export interface Message {

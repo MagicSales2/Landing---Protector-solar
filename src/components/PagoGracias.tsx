@@ -1,55 +1,59 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, Clock, XCircle, Loader2 } from 'lucide-react';
-import { confirmarPagoPorPagoId, ResultadoConfirmacion } from '../lib/supabaseClient';
+import { consultarPago, ResultadoConfirmacion } from '../lib/supabaseClient';
 import { trackPixelEvent } from '../lib/tracking';
 
-// Página final a la que Mercado Pago devuelve al cliente después de pagar.
-// Cuando carga, avisa al servidor "este pago ocurrió" y el servidor lo
-// verifica con Mercado Pago; recién ahí la venta entra a Kommo.
+// Página final a la que Wompi devuelve al cliente después de pagar.
+// El pago ya fue confirmado por Wompi y su webhook ya avisó al servidor, pero
+// PSE/transferencias pueden tardar: aquí se consulta el estado real del pedido
+// (sin confirmar nada) hasta que aparezca como pagado.
 export default function PagoGracias() {
   const [estado, setEstado] = useState<'cargando' | 'ok' | 'pendiente' | 'error' | 'nopago'>('cargando');
   const [resultado, setResultado] = useState<ResultadoConfirmacion | null>(null);
   const [avisoCompra, setAvisoCompra] = useState('');
-  const pagoId = useRef<string | null>(null);
-  const estadoMp = useRef<string | null>(null);
+  const pedidoId = useRef<string | null>(null);
 
   useEffect(() => {
     const raw = window.location.hash;
     const q = raw.includes('?') ? raw.slice(raw.indexOf('?') + 1) : '';
     const params = new URLSearchParams(q);
-    const collectionId = params.get('collection_id') || params.get('payment_id');
-    const collectionStatus = params.get('collection_status');
-    estadoMp.current = collectionStatus;
-    pagoId.current = collectionId;
+    const id = params.get('pedido')?.trim() || '';
+    pedidoId.current = id || null;
 
-    if (collectionId) {
-      confirmarPagoPorPagoId(collectionId).then((res) => {
-        setResultado(res);
-        if (res.ok && res.estado === 'pagado') {
-          trackPixelEvent('Purchase', {
-            value: Number(res.total ?? 0),
-            currency: 'COP',
-            content_name: `Pedido ${res.orderId}`,
-            content_type: 'product',
-          });
-          setEstado('ok');
-        } else if (collectionStatus === 'pending' || collectionStatus === 'in_process') {
-          setEstado('pendiente');
-        } else {
-          setEstado('error');
-        }
-      }).catch(() => {
-        setEstado(collectionStatus === 'approved' ? 'nopago' : 'error');
-      });
-    } else if (collectionStatus === 'pending' || collectionStatus === 'in_process') {
-      setEstado('pendiente');
-    } else if (collectionStatus === 'rejected' || collectionStatus === 'failure') {
-      setEstado('error');
-    } else {
-      // Llegó aquí sin parámetros de pago.
-      setEstado(estadoMp.current === 'approved' ? 'nopago' : 'nopago');
-      setAvisoCompra('No encontramos un pago reciente. Si ya pagaste, tu pedido sigue guardado y te escribimos pronto.');
+    // Sin pedido en el link: no hay nada que consultar.
+    if (!id) {
+      setEstado('nopago');
+      setAvisoCompra('No encontramos tu pedido. Si ya pagaste, tu pedido sigue guardado y te escribimos pronto.');
+      return;
     }
+
+    let intentos = 0;
+    const consultar = () => {
+      intentos += 1;
+      consultarPago(id)
+        .then((res) => {
+          setResultado(res);
+          if (res.ok && res.estado === 'pagado') {
+            trackPixelEvent('Purchase', {
+              value: Number(res.total ?? 0),
+              currency: 'COP',
+              content_name: `Pedido ${res.orderId}`,
+              content_type: 'product',
+            });
+            setEstado('ok');
+          } else if (intentos < 10) {
+            // Todavía no llega el webhook: se reintenta unos segundos.
+            window.setTimeout(consultar, 3000);
+          } else {
+            setEstado('pendiente');
+          }
+        })
+        .catch(() => {
+          if (intentos < 10) window.setTimeout(consultar, 3000);
+          else setEstado('pendiente');
+        });
+    };
+    consultar();
   }, []);
 
   const volver = () => {
@@ -63,7 +67,7 @@ export default function PagoGracias() {
         {estado === 'cargando' ? (
           <>
             <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Loader2 className="w-8 h-8 text-[#009EE3] animate-spin" />
+              <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
             </div>
             <h3 className="text-lg font-black text-slate-900">Confirmando tu pago...</h3>
             <p className="text-xs text-slate-500 mt-2">En segundos tu pedido queda listo.</p>
@@ -103,7 +107,7 @@ export default function PagoGracias() {
             </div>
             <h3 className="text-lg font-black text-slate-900">Pago en proceso</h3>
             <p className="text-xs text-slate-500 mt-2 leading-relaxed mb-6">
-              Tu pago está pendiente de confirmar por Mercado Pago (PSE o Efecty pueden tardar unos minutos). Tu reserva está guardada; en cuanto se confirme, te avisamos.
+              Tu pago está pendiente de confirmación por Wompi (PSE o transferencias pueden tardar unos minutos). Tu reserva está guardada; en cuanto se confirme, te avisamos.
             </p>
             <button
               onClick={volver}

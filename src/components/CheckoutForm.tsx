@@ -27,16 +27,16 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
     notes: ''
   });
 
-  const [paymentMethod, setPaymentMethod] = useState<'contraentrega' | 'mercadopago'>('contraentrega');
+  const [paymentMethod, setPaymentMethod] = useState<'contraentrega' | 'wompi'>('contraentrega');
   const [availableCities, setAvailableCities] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [phoneError, setPhoneError] = useState('');
   const [successOrder, setSuccessOrder] = useState<Order | null>(null);
   const [submitError, setSubmitError] = useState('');
-  // Link de pago de Mercado Pago (único si se pudo crear, fijo de respaldo).
-  const [mpPagoUrl, setMpPagoUrl] = useState('');
-  // True si el servidor creó el link único y ya mandamos al cliente a pagar.
-  const [mpRedirigio, setMpRedirigio] = useState(false);
+  // Link de pago de Wompi (único para este pedido).
+  const [pagoUrl, setPagoUrl] = useState('');
+  // True si el servidor creó el link y ya mandamos al cliente a pagar.
+  const [redirigio, setRedirigio] = useState(false);
   // Campo invisible: los robots lo llenan solos, las personas nunca lo ven.
   const [websiteTrampa, setWebsiteTrampa] = useState('');
 
@@ -93,7 +93,7 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
     setIsSubmitting(true);
     setSubmitError('');
 
-    const metodoPago = paymentMethod === 'contraentrega' ? 'Contra Entrega' : 'Mercado Pago';
+    const metodoPago = paymentMethod === 'contraentrega' ? 'Contra Entrega' : 'Wompi';
 
     // El pedido lo crea el servidor: valida los datos, confirma el precio y
     // lo manda a Kommo. Si algo falla, no se confirma nada al cliente.
@@ -110,7 +110,7 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
         address2: formData.address2.trim(),
         notes: formData.notes.trim(),
         offerId: activeOffer.id,
-        paymentMethod: metodoPago as 'Contra Entrega' | 'Mercado Pago',
+        paymentMethod: metodoPago,
         website: websiteTrampa,
       });
     } catch (err) {
@@ -151,12 +151,12 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
       content_type: 'product'
     });
 
-    // Con Mercado Pago, se abre el link único de este pedido. Si el servidor no
-    // alcanzó a crear el link único, se usa el link fijo (y queda a la espera).
-    if (newOrder.paymentMethod === 'Mercado Pago') {
-      const url = (creado.initPoint ?? creado.mercadopagoUrl ?? activeOffer.mercadopagoUrl ?? '').trim();
-      setMpPagoUrl(url);
-      setMpRedirigio(!!creado.initPoint);
+    // Con Wompi, se abre el link único de este pedido. Si el servidor no
+    // alcanzó a crearlo, el pedido queda guardado y se le avisa al cliente.
+    if (newOrder.paymentMethod === 'Wompi') {
+      const url = (creado.initPoint ?? '').trim();
+      setPagoUrl(url);
+      setRedirigio(!!creado.initPoint);
       if (creado.initPoint) {
         window.location.assign(creado.initPoint);
       }
@@ -181,8 +181,8 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
     setSubmitError('');
     setPhoneError('');
     setWebsiteTrampa('');
-    setMpPagoUrl('');
-    setMpRedirigio(false);
+    setPagoUrl('');
+    setRedirigio(false);
     setFormData({
       clientName: '',
       clientPhone: '',
@@ -211,7 +211,7 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
           </div>
 
           <span className="text-emerald-700 bg-emerald-50 text-[10px] font-black px-3.5 py-1.5 rounded-full border border-emerald-100 tracking-wider">
-            {successOrder.paymentMethod === 'Mercado Pago' ? 'RESERVA REGISTRADA CON ÉXITO 💳' : 'RESERVA REGISTRADA CON ÉXITO 🚚'}
+            {successOrder.paymentMethod === 'Wompi' ? 'RESERVA REGISTRADA CON ÉXITO 💳' : 'RESERVA REGISTRADA CON ÉXITO 🚚'}
           </span>
 
           <h3 className="text-2xl font-black text-slate-800 mt-4 mb-1">
@@ -240,30 +240,30 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
             </div>
           </div>
 
-          {successOrder.paymentMethod === 'Mercado Pago' ? (
+          {successOrder.paymentMethod === 'Wompi' ? (
             <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4.5 text-center my-6">
               <span className="text-[9px] tracking-wider uppercase font-black text-white bg-blue-600 px-3 py-1 rounded">PAGO INMEDIATO SEGURO 💳</span>
-              <h4 className="text-sm font-black text-slate-900 mt-3 mb-1">Completa tu pago con Mercado Pago</h4>
+              <h4 className="text-sm font-black text-slate-900 mt-3 mb-1">Completa tu pago con Wompi</h4>
               <p className="text-xs text-slate-600 max-w-sm mx-auto mb-4 leading-relaxed">
-                Ya tenemos tus datos reservados. Paga con PSE, Tarjeta de Crédito, Débito o Efecty y tu pedido queda confirmado al instante:
+                Ya tenemos tus datos reservados. Paga con tarjeta, PSE, Nequi, Bancolombia o QR y tu pedido queda confirmado al instante:
               </p>
-              {mpPagoUrl ? (
+              {pagoUrl ? (
                 <a
-                  href={mpPagoUrl}
+                  href={pagoUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 bg-[#009EE3] hover:bg-[#0086C3] text-white font-black py-4 px-6 rounded-xl transition-all shadow-md text-sm md:text-base animate-pulse w-full max-w-xs cursor-pointer"
-                  id="success-mercadopago-redirect"
+                  className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-black py-4 px-6 rounded-xl transition-all shadow-md text-sm md:text-base animate-pulse w-full max-w-xs cursor-pointer"
+                  id="success-wompi-redirect"
                 >
-                  PAGAR CON MERCADO PAGO 💳
+                  PAGAR CON WOMPI 💳
                 </a>
               ) : (
                 <p className="text-xs text-slate-600 max-w-sm mx-auto leading-relaxed">
-                  Se está generando tu link de pago... si no se abrió, vuelve a intentarlo en un momento.
+                  No pudimos generar el link de pago. Tu reserva <strong>quedó guardada</strong>: escríbenos por WhatsApp y te enviamos el link para pagar.
                 </p>
               )}
               <p className="text-[10px] text-slate-500 mt-3 font-medium">
-                {mpRedirigio ? 'Se abrió Mercado Pago en esta pestaña. Si no cargó, toca el botón azul.' : 'Puedes pagar con este botón cuando quieras; tu reserva queda guardada.'}
+                {redirigio ? 'Se abrió Wompi en esta pestaña. Si no cargó, toca el botón azul.' : 'Puedes pagar con este botón cuando quieras; tu reserva queda guardada.'}
               </p>
             </div>
           ) : (
@@ -537,9 +537,9 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
 
               <button
                 type="button"
-                onClick={() => setPaymentMethod('mercadopago')}
+                onClick={() => setPaymentMethod('wompi')}
                 className={`flex flex-col p-4 rounded-xl border text-left transition-all cursor-pointer outline-none ${
-                  paymentMethod === 'mercadopago'
+                  paymentMethod === 'wompi'
                     ? 'border-orange-500 bg-orange-500/10 shadow-[0_0_12px_rgba(240,90,40,0.15)]'
                     : 'border-slate-800 bg-slate-950/70 hover:border-slate-700'
                 }`}
@@ -547,14 +547,14 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
               >
                 <div className="flex items-center gap-2.5">
                   <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                    paymentMethod === 'mercadopago' ? 'border-orange-500' : 'border-slate-600'
+                    paymentMethod === 'wompi' ? 'border-orange-500' : 'border-slate-600'
                   }`}>
-                    {paymentMethod === 'mercadopago' && <div className="w-2 h-2 rounded-full bg-orange-500" />}
+                    {paymentMethod === 'wompi' && <div className="w-2 h-2 rounded-full bg-orange-500" />}
                   </div>
-                  <span className="text-xs md:text-sm font-extrabold text-white">Pago Online Directo</span>
+                  <span className="text-xs md:text-sm font-extrabold text-white">Pago Online con Wompi</span>
                 </div>
                 <p className="text-[10px] md:text-xs text-slate-400 font-medium mt-1.5 pl-6">
-                  Tarjeta, PSE o Efecty vía Mercado Pago. Envío Express.
+                  Tarjeta, PSE, Nequi o Bancolombia. Envío Express.
                 </p>
               </button>
             </div>
@@ -573,7 +573,7 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
             <div className="flex justify-between text-xs md:text-sm items-center">
               <span className="text-slate-500">Método de Pago</span>
               <span className={`${paymentMethod === 'contraentrega' ? 'text-orange-400 border-orange-500/20 bg-orange-500/10' : 'text-blue-400 border-blue-500/20 bg-blue-500/10'} font-bold text-[10px] md:text-xs px-2.5 py-0.5 rounded-full border`}>
-                {paymentMethod === 'contraentrega' ? 'CONTRA ENTREGA' : 'MERCADO PAGO (ONLINE)'}
+                {paymentMethod === 'contraentrega' ? 'CONTRA ENTREGA' : 'WOMPI (ONLINE)'}
               </span>
             </div>
             <div className="border-t border-slate-800 my-2 pt-2 flex justify-between text-base md:text-lg">

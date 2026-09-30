@@ -49,7 +49,7 @@ export default function App() {
   const [ofertas, setOfertas] = useState<OrderOffer[]>(FALLBACK_OFFERS);
 
   // Abre el panel solo cuando la URL tiene el hash secreto (no hay botón visible)
-  // y muestra la página de gracias cuando Mercado Pago devuelve al cliente.
+  // y muestra la página de gracias cuando Wompi devuelve al cliente.
   useEffect(() => {
     const chequear = () => {
       const hash = window.location.hash;
@@ -736,7 +736,7 @@ export default function App() {
         onClose={cerrarAdmin}
       />
 
-      {/* Página final tras pagar en Mercado Pago (confirma el pago real) */}
+      {/* Página final tras pagar en Wompi (muestra el estado del pago) */}
       {showGracias && !showAdminModal && <PagoGracias />}
 
       {/* AUTOMATED ADVISORY BOT / FAQ ASSISTANT */}
