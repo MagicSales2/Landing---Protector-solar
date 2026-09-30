@@ -12,197 +12,18 @@
 //       { "orderId": "PED-..." } con sesión de administrador → confirma
 //       un pedido que quedó pendiente (por ejemplo, si pagó por el link fijo
 //       y no se pudo detectar solo).
+//
+//  Nota: el trabajo pesado (mover lead, guía, Telegram, Sheets) vive en
+//  _shared/confirmarVenta.ts, que también usa confirmar-pago-wompi.
 // ============================================================================
 
-import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { enviarAKommo, marcarMetodoPago, moverLeadAEstado, ResumenPedido } from '../_shared/kommo.ts'
-import { enviarTelegram, enlaceVentaKommo, etiquetaVentaKommo } from '../_shared/telegram.ts'
-import { generarGuiaPedido } from '../_shared/envia.ts'
-import { avisoSheets } from '../_shared/sheets.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { confirmarVenta, json } from '../_shared/confirmarVenta.ts'
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
-
-const COLUMNAS_PEDIDO =
-  'id, numero, client_name, client_phone, client_email, document_id, department, city, address, address2, notes, offer_name, quantity, total_price, payment_method, utm_source, utm_medium, utm_campaign, utm_content, utm_term, referrer, status, kommo_estado, kommo_lead_id'
-
-function json(cuerpo: unknown, estado = 200) {
-  return new Response(JSON.stringify(cuerpo), {
-    status: estado,
-    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-  })
-}
-
-const formatearCOP = (n: number) => '$ ' + n.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
-
-// Avisa por Telegram que un pago de Mercado Pago quedó confirmado.
-async function avisarPagoConfirmado(fila: any, kommoResumen: string, guiaResumen = '') {
-  const lineas = [
-    '💚 <b>¡PAGO CONFIRMADO!</b>',
-    `🧾 <code>${fila.id}</code> · N.º ${fila.numero ?? fila.id}`,
-    `👤 ${fila.client_name}`,
-    `📱 ${fila.client_phone}`,
-    `📍 ${fila.city}${fila.department ? ', ' + fila.department : ''}`,
-    `🧴 Protector Solar Anthelios SPF 50+ · ${fila.offer_name ?? ''} — ${formatearCOP(Number(fila.total_price))}`,
-    kommoResumen,
-  ]
-  if (guiaResumen) lineas.push(guiaResumen)
-  await enviarTelegram(lineas.join('\n'))
-}
-
-// Con el pago ya confirmado se crea la guía de envío (aquí no va recaudo:
-// el dinero ya está aprobado). Se elige la transportadora más económica y se
-// guarda el enlace de seguimiento en Kommo.
-async function guiaParaMP(sb: SupabaseClient, kommoToken: string, fila: any) {
-  const enviaToken = Deno.env.get('ENVIA_TOKEN') || ''
-  try {
-    const resGuia = await generarGuiaPedido(sb, enviaToken, kommoToken, {
-      id: fila.id,
-      numero: fila.numero,
-      client_name: fila.client_name,
-      client_phone: fila.client_phone,
-      city: fila.city ?? '',
-      department: fila.department ?? '',
-      address: fila.address ?? '',
-      address2: fila.address2 ?? '',
-      notes: fila.notes ?? '',
-      quantity: Number(fila.quantity),
-      total_price: Number(fila.total_price),
-      kommo_lead_id: fila.kommo_lead_id ? Number(fila.kommo_lead_id) : null,
-    }, false)
-    if (resGuia.omitido) return { resumen: '📦 Guía: Envia.com no está activado', respuesta: null }
-    if (resGuia.ok) {
-      return {
-        resumen: `📦 Guía: ${resGuia.carrier} · № ${resGuia.numero}${resGuia.kommoOk ? ' · link en Kommo 📎' : ''}`,
-        respuesta: { ok: true, numero: resGuia.numero, carrier: resGuia.carrier, costo: resGuia.costo },
-      }
-    }
-    return { resumen: `📦 Guía: ⚠️ no se pudo crear (${resGuia.error ?? 'error'})`, respuesta: null }
-  } catch (err) {
-    return { resumen: `📦 Guía: ⚠️ ${err instanceof Error ? err.message : String(err)}`, respuesta: null }
-  }
-}
-
-function aPedido(row: any): ResumenPedido {
-  return {
-    id: row.id,
-    total_price: Number(row.total_price),
-    nombre: row.client_name,
-    celular: row.client_phone,
-    correo: row.client_email ?? '',
-    documento: row.document_id ?? '',
-    departamento: row.department ?? '',
-    ciudad: row.city ?? '',
-    direccion: row.address ?? '',
-    direccion2: row.address2 ?? '',
-    notas: row.notes ?? '',
-    cantidad: Number(row.quantity),
-    metodoPago: row.payment_method,
-    utm_source: row.utm_source,
-    utm_medium: row.utm_medium,
-    utm_campaign: row.utm_campaign,
-    utm_content: row.utm_content,
-    utm_term: row.utm_term,
-    referrer: row.referrer,
-  }
-}
-
-// Marca el pedido como "pagado" y mueve el lead que ya está en Kommo:
-// pasa de la etapa "Mercado pago - Pendiente de pago" a la etapa
-// "Mercado pago", y su campo "Medio De Pago" cambia de "Pendiente de pago"
-// a "Mercado Pago" (mismo lead, no se duplica). Si el lead nunca llegó a
-// crearse, se crea ahora como respaldo.
-async function confirmar(sb: SupabaseClient, kommoToken: string, fila: any) {
-  const id = fila.id
-
-  if (fila.status !== 'pagado') {
-    await sb.from('pedidos').update({ status: 'pagado' }).eq('id', id)
-  }
-
-  const yaVendido = fila.kommo_estado === 'enviado' || fila.kommo_estado === 'enviado_con_aviso'
-
-  // 1) El lead ya existe: solo se le cambia la etapa y el campo "Medio De Pago".
-  if (fila.kommo_lead_id && yaVendido) {
-    let kommoResumen = '⚠️ Kommo: el avance no se confirmó'
-    try {
-      const okEtapa = await moverLeadAEstado(sb, kommoToken, Number(fila.kommo_lead_id), 'status_mercadopago')
-      const okCampo = await marcarMetodoPago(sb, kommoToken, Number(fila.kommo_lead_id), 'enum_mercadopago')
-      const ok = okEtapa && okCampo
-      await sb
-        .from('pedidos')
-        .update({ kommo_estado: ok ? 'enviado' : 'enviado_con_aviso', kommo_enviado_en: new Date().toISOString() })
-        .eq('id', id)
-      await sb
-        .from('sync_log')
-        .insert({ pedido_id: id, destino: 'kommo', estado: ok ? 'ok' : 'aviso', detalle: `Lead ${fila.kommo_lead_id}: etapa → Mercado Pago` })
-      kommoResumen = ok
-        ? `✅ Kommo: <a href="${enlaceVentaKommo(fila.kommo_lead_id)}">lead ${fila.kommo_lead_id}</a> movido a la etapa "Mercado Pago"`
-        : '⚠️ Kommo: no confirmó el avance a la etapa "Mercado Pago"'
-    } catch (err) {
-      const detalle = err instanceof Error ? err.message : String(err)
-      console.error('Fallo al confirmar el pago en Kommo:', detalle)
-      await sb.from('pedidos').update({ kommo_estado: 'error', kommo_error: detalle.slice(0, 500) }).eq('id', id)
-      await sb.from('sync_log').insert({ pedido_id: id, destino: 'kommo', estado: 'error', detalle: detalle.slice(0, 500) })
-      kommoResumen = `⚠️ Kommo: ${detalle.slice(0, 160)}`
-    }
-    // Guía de envío (pago ya aprobado) + aviso por Telegram.
-    const guiaMP = await guiaParaMP(sb, kommoToken, fila)
-    await avisarPagoConfirmado(fila, kommoResumen, guiaMP.resumen)
-    avisoSheets(sb, id)
-    return json({
-      ok: true,
-      orderId: id,
-      estado: 'pagado',
-      total: Number(fila.total_price),
-      cantidad: Number(fila.quantity),
-      cliente: fila.client_name,
-      guia: guiaMP.respuesta,
-    })
-  }
-
-  // 2) Respaldo: no había lead en Kommo; se crea ahora como venta (etapa MP).
-  let kommoResumen = '⚠️ Kommo: no se pudo enviar la venta'
-  if (!yaVendido) {
-    const pedido = aPedido(fila)
-    try {
-      const { leadId, contactId, camposPendientes } = await enviarAKommo(sb, kommoToken, pedido)
-      const aviso = camposPendientes.length ? ` · OJO: campo de producto/medio de pago no confirmado por Kommo` : ''
-      await sb
-        .from('pedidos')
-        .update({
-          kommo_lead_id: leadId,
-          kommo_contact_id: contactId,
-          kommo_estado: camposPendientes.length ? 'enviado_con_aviso' : 'enviado',
-          kommo_enviado_en: new Date().toISOString(),
-        })
-        .eq('id', id)
-      await sb.from('sync_log').insert({ pedido_id: id, destino: 'kommo', estado: 'ok', detalle: `Venta ${leadId}${aviso}` })
-      kommoResumen = `✅ Kommo: ${etiquetaVentaKommo(leadId)}`
-    } catch (err) {
-      const detalle = err instanceof Error ? err.message : String(err)
-      console.error('Fallo al enviar a Kommo:', detalle)
-      await sb.from('pedidos').update({ kommo_estado: 'error', kommo_error: detalle.slice(0, 500) }).eq('id', id)
-      await sb.from('sync_log').insert({ pedido_id: id, destino: 'kommo', estado: 'error', detalle: detalle.slice(0, 500) })
-      kommoResumen = `⚠️ Kommo: ${detalle.slice(0, 160)}`
-    }
-  }
-  // Guía de envío (pago ya aprobado) + aviso por Telegram.
-  const guiaMP = await guiaParaMP(sb, kommoToken, fila)
-  await avisarPagoConfirmado(fila, kommoResumen, guiaMP.resumen)
-  avisoSheets(sb, id)
-
-  return json({
-    ok: true,
-    orderId: id,
-    estado: 'pagado',
-    total: Number(fila.total_price),
-    cantidad: Number(fila.quantity),
-    cliente: fila.client_name,
-    guia: guiaMP.respuesta,
-  })
 }
 
 // Pregunta a Mercado Pago si un pago fue realmente aprobado.
@@ -254,20 +75,18 @@ Deno.serve(async (req) => {
       const orderId = String(pago.external_reference ?? '').trim()
       const { data: fila, error } = await sb
         .from('pedidos')
-        .select(COLUMNAS_PEDIDO)
+        .select('*')
         .eq('id', orderId)
         .eq('payment_method', 'Mercado Pago')
         .maybeSingle()
       if (error || !fila) {
         console.warn(`Pago ${paymentId} aprobado pero sin pedido ligado (external_reference=${orderId || 'vacío'})`)
-        await enviarTelegram(`🚨 <b>Alerta:</b> Mercado Pago reportó el pago <code>${paymentId}</code> como <b>aprobado</b>, pero no hay ningún pedido ligado (referencia: ${orderId || 'vacía'}). Revisalo.`)
         return json({ ok: false, estado: 'sin_pedido' })
       }
-      return await confirmar(sb, kommoToken, fila)
+      return await confirmarVenta(sb, kommoToken, fila, 'mercadopago')
     } catch (err) {
       const motivo = err instanceof Error ? err.message : String(err)
       console.error('No se pudo verificar el pago:', motivo)
-      await enviarTelegram(`🚨 <b>Alerta:</b> no se pudo verificar un pago de Mercado Pago (<code>${paymentId}</code>): ${motivo.slice(0, 160)}`)
       return json({ error: 'No se pudo verificar el pago' }, 502)
     }
   }
@@ -295,13 +114,13 @@ Deno.serve(async (req) => {
 
     const { data: fila, error } = await sb
       .from('pedidos')
-      .select(COLUMNAS_PEDIDO)
+      .select('*')
       .eq('id', orderId)
       .eq('payment_method', 'Mercado Pago')
       .maybeSingle()
     if (error || !fila) return json({ error: 'Pedido no encontrado' }, 404)
 
-    return await confirmar(sb, kommoToken, fila)
+    return await confirmarVenta(sb, kommoToken, fila, 'mercadopago')
   }
 
   return json({ error: 'No sé qué confirmar' }, 400)

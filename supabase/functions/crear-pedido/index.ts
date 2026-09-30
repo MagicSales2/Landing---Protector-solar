@@ -69,9 +69,39 @@ function generarId(): string {
 
 const formatearCOP = (n: number) => '$ ' + n.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
 
+// Crea un "Payment Link" de Wompi: una URL de pago única con el monto ya
+// fijo y de un solo uso, ligada a este pedido. El cliente paga en la página de
+// Wompi (tarjeta, PSE, Nequi, Bancolombia, QR...) y Wompi avisa por webhook
+// cuando la transacción queda APPROVED.
+async function crearLinkWompi(llavePrivada: string, pedido: { id: string; total: number; producto: string; cantidad: number }) {
+  const res = await fetch('https://api.wompi.co/v1/payment_links', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${llavePrivada}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: `Pago pedido ${pedido.id}`,
+      description: pedido.producto,
+      single_use: true,
+      amount_in_cents: Math.round(pedido.total * 100),
+      currency: 'COP',
+      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      redirect_url: `${SITIO}/#/gracias`,
+      collect_shipping: false,
+    }),
+  })
+  const cuerpo = await res.json()
+  if (!res.ok) {
+    throw new Error(`Wompi ${res.status}: ${String(cuerpo?.error?.reason ?? JSON.stringify(cuerpo)).slice(0, 300)}`)
+  }
+  const linkId = String(cuerpo?.data?.id ?? '')
+  if (!linkId) throw new Error('Wompi no devolvió el id del link de pago')
+  return { linkId, initPoint: `https://checkout.wompi.co/l/${linkId}` }
+}
+
 // Crea el "Checkout Pro" de Mercado Pago: un link único ligado a este pedido
 // (external_reference) para poder confirmar el pago cuando llegue la
 // notificación o cuando el cliente vuelva desde Mercado Pago.
+// (Plan B: si Wompi falla, se usa Mercado Pago para no dejar al cliente sin
+// forma de pagar.)
 async function crearPreferenciaMP(token: string, pedido: { id: string; total: number; producto: string; cantidad: number }) {
   const res = await fetch('https://api.mercadopago.com/checkout/preferences', {
     method: 'POST',
@@ -253,11 +283,38 @@ Deno.serve(async (req) => {
     referrer: guardado.referrer,
   }
 
-  // --- 5) Mercado Pago: pedido pendiente + link de pago + SIGUE Kommo
+  // --- 5) Pago online: pedido pendiente + link de pago + SIGUE Kommo
   if (esMercadoPago) {
     let initPoint: string | null = null
+    let gateway: 'wompi' | 'mercadopago' | null = null
+    const wompiPriv = Deno.env.get('WOMPI_PRIVATE_KEY')
     const mpToken = Deno.env.get('MP_TOKEN')
-    if (mpToken) {
+
+    // Plan A: Wompi (comisiones más bajas: tarjeta, PSE, Nequi, Bancolombia).
+    if (wompiPriv) {
+      try {
+        const { linkId, initPoint: url } = await crearLinkWompi(wompiPriv, {
+          id,
+          total: pedido.total_price,
+          producto: `Protector Solar Anthelios SPF 50+ x${pedido.cantidad}`,
+          cantidad: pedido.cantidad,
+        })
+        await sb.from('pedidos').update({ wompi_payment_link_id: linkId, wompi_status: 'link_creado' }).eq('id', id)
+        initPoint = url
+        gateway = 'wompi'
+        await sb
+          .from('sync_log')
+          .insert({ pedido_id: id, destino: 'wompi', estado: 'ok', detalle: `Link de pago ${linkId}` })
+      } catch (err) {
+        console.error('No se pudo crear el link de Wompi:', err instanceof Error ? err.message : err)
+        await sb
+          .from('sync_log')
+          .insert({ pedido_id: id, destino: 'wompi', estado: 'error', detalle: (err instanceof Error ? err.message : String(err)).slice(0, 500) })
+      }
+    }
+
+    // Plan B: Mercado Pago (si Wompi no está o falló).
+    if (!initPoint && mpToken) {
       try {
         const { preferenciaId, initPoint: url } = await crearPreferenciaMP(mpToken, {
           id,
@@ -267,6 +324,7 @@ Deno.serve(async (req) => {
         })
         await sb.from('pedidos').update({ mp_preferencia_id: preferenciaId || null }).eq('id', id)
         initPoint = url || null
+        gateway = 'mercadopago'
       } catch (err) {
         // Sin link único: el cliente paga con el link fijo y el comerciante
         // confirma el pago a mano desde el panel.
@@ -279,8 +337,10 @@ Deno.serve(async (req) => {
 
     // El lead entra a Kommo de inmediato a la etapa "Mercado pago - Pendiente de
     // pago" (esperando el pago), con el campo "Medio De Pago" = "Pendiente de
-    // pago". Cuando el pago se confirme, confirmar-pago mueve ese MISMO lead a la
-    // etapa "Mercado pago" (y el campo pasa a "Mercado Pago").
+    // pago". Cuando el pago se confirme, confirmar-pago-wompi (o confirmar-pago
+    // si fuera Mercado Pago) mueve ese MISMO lead a la etapa "Mercado pago"
+    // (y el campo pasa a la opción final). El link de pago queda en el campo
+    // "Link de pago" de Kommo para poder mandárselo por WhatsApp.
     // (No se avisa por Telegram todavía: solo se avisa cuando el pago se
     // confirma, así el dueño no se llena de ruido con pedidos sin pagar.)
     try {
@@ -301,7 +361,7 @@ Deno.serve(async (req) => {
         .eq('id', id)
       await sb
         .from('sync_log')
-        .insert({ pedido_id: id, destino: 'kommo', estado: 'ok', detalle: `Venta ${leadId} (medio de pago: pendiente)${aviso}` })
+        .insert({ pedido_id: id, destino: 'kommo', estado: 'ok', detalle: `Venta ${leadId} (medio de pago: pendiente, gateway: ${gateway ?? 'ninguno'})${aviso}` })
     } catch (err) {
       const detalle = err instanceof Error ? err.message : String(err)
       console.error('Fallo al enviar a Kommo:', detalle)
@@ -310,7 +370,7 @@ Deno.serve(async (req) => {
     }
 
     avisoSheets(sb, id)
-    return json({ ok: true, orderId: id, numero: guardado.numero, total: guardado.total_price, initPoint, mercadopagoUrl: oferta.mercadopago_url || '' })
+    return json({ ok: true, orderId: id, numero: guardado.numero, total: guardado.total_price, initPoint, gateway, mercadopagoUrl: oferta.mercadopago_url || '' })
   }
 
   // --- 6) Contra Entrega: enviar a Kommo

@@ -9,3 +9,4 @@ coverage/
 !.env.production
 
 supabase/.temp/
+state.md
