@@ -33,6 +33,10 @@ var CONFIG = {
   hoja1: 'Hoja 1',
 };
 
+// Cada vez que publiques una versión nueva, cambia este número por +1
+// (v3, v4, ...). Sirve para verificar desde el servidor cuál está activa.
+var VERSION = 'v3';
+
 // Columnas que el sistema conoce y mantiene sincronizadas.
 var CABECERAS = [
   'ID', 'Numero', 'Fecha', 'Cliente', 'Celular', 'Correo', 'Documento',
@@ -177,7 +181,7 @@ function doGet() {
       if (existentes[i].getHandlerFunction() === 'onEdit') { ya = true; break; }
     }
     if (!ya) ScriptApp.newTrigger('onEdit').forSpreadsheet(ss).onEdit().create();
-    return respuesta_(200, { ok: true, disparador: ya ? 'ya instalado' : 'instalado ahora' });
+    return respuesta_(200, { ok: true, disparador: ya ? 'ya instalado' : 'instalado ahora', ver: VERSION });
   } catch (err) {
     return respuesta_(500, { ok: false, error: String(err) });
   }
@@ -212,7 +216,8 @@ function doPost(e) {
     }
 
     escribirHoja1_(pedido, orderId);
-    return respuesta_(200, { ok: true, fila: fila, hoja1: true });
+    try { hoja.getRange(1, 26).setValue('MagicSync v' + VERSION); } catch (e) { }
+    return respuesta_(200, { ok: true, fila: fila, hoja1: true, ver: VERSION });
   } catch (err) {
     return respuesta_(500, { ok: false, error: String(err) });
   }
@@ -274,6 +279,12 @@ function escribirHoja1_(pedido, orderId) {
       if (leadId) {
         var urlLead = 'https://magiapastelerta4.kommo.com/leads/detail/' + leadId;
         celdaLead.setFormula('=HYPERLINK("' + urlLead + '","' + etiqueta.replace(/"/g, '""') + '")');
+        var mostrar = String(celdaLead.getDisplayValue());
+        if (mostrar.indexOf('#') === 0) {
+          // Si el idioma de la hoja rechazara la fórmula, ponemos el enlace
+          // directo (se ve igual: texto azul clickeable).
+          celdaLead.setRichTextValue(SpreadsheetApp.newRichTextValue().setText(etiqueta).setLinkUrl(urlLead).build());
+        }
       } else {
         celdaLead.setValue(orderId);
       }
