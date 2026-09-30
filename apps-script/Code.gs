@@ -35,7 +35,7 @@ var CONFIG = {
 
 // Cada vez que publiques una versión nueva, cambia este número por +1
 // (v3, v4, ...). Sirve para verificar desde el servidor cuál está activa.
-var VERSION = 'v3';
+var VERSION = 'v4';
 
 // Columnas que el sistema conoce y mantiene sincronizadas.
 var CABECERAS = [
@@ -216,7 +216,7 @@ function doPost(e) {
     }
 
     escribirHoja1_(pedido, orderId);
-    try { hoja.getRange(1, 26).setValue('MagicSync v' + VERSION); } catch (e) { }
+    try { hoja.getRange(1, 26).setValue('MagicSync ' + VERSION); } catch (e) { }
     return respuesta_(200, { ok: true, fila: fila, hoja1: true, ver: VERSION });
   } catch (err) {
     return respuesta_(500, { ok: false, error: String(err) });
@@ -239,11 +239,10 @@ function obtenerHoja1_() {
 }
 
 function asegurarCabeceras1_(hoja) {
-  var ultima = Math.max(hoja.getLastColumn(), 1);
-  var fila1 = hoja.getLastRow() > 0 ? hoja.getRange(1, 1, 1, ultima).getValues()[0] : [];
-  var vacia = true;
-  for (var i = 0; i < fila1.length; i++) { if (String(fila1[i]).trim()) { vacia = false; break; } }
-  if (vacia) hoja.getRange(1, 1, 1, CABECERAS1.length).setValues([CABECERAS1]);
+  // IMPORTANTE: la fila 1 SIEMPRE lleva las cabeceras correctas. Si una prueba
+  // antigua dejó datos en ella, se restauran las cabeceras (los datos reales
+  // están en las filas 2 en adelante).
+  hoja.getRange(1, 1, 1, CABECERAS1.length).setValues([CABECERAS1]);
 }
 
 // "Estado" como corresponde en tu hoja 1: 'nuevo' cuando llega, y 'error'
@@ -312,7 +311,9 @@ function escribirHoja1_(pedido, orderId) {
     }
 
     if (idx['Estado'] !== undefined) hoja1.getRange(fila, idx['Estado'] + 1).setValue(estadoHoja1_(pedido));
-  } catch (err) { }
+  } catch (err) {
+    try { hoja1.getRange(1, 26).setValue('ERR: ' + String(err)); } catch (e) { }
+  }
 }
 
 function buscarFilaHoja1_(hoja, orderId) {
