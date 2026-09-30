@@ -15,7 +15,7 @@
 // ============================================================================
 
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { enviarAKommo, marcarMetodoPago, ResumenPedido } from '../_shared/kommo.ts'
+import { enviarAKommo, marcarMetodoPago, moverLeadAEstado, ResumenPedido } from '../_shared/kommo.ts'
 import { enviarTelegram, enlaceVentaKommo, etiquetaVentaKommo } from '../_shared/telegram.ts'
 
 const CORS_HEADERS = {
@@ -75,10 +75,11 @@ function aPedido(row: any): ResumenPedido {
   }
 }
 
-// Marca el pedido como "pagado" y cambia el lead que ya está en Kommo:
-// su campo "Medio De Pago" pasa de "Pendiente de pago" a "Mercado Pago"
-// (mismo lead, no se duplica). Si el lead nunca llegó a crearse, se crea
-// ahora como respaldo.
+// Marca el pedido como "pagado" y mueve el lead que ya está en Kommo:
+// pasa de la etapa "Mercado pago - Pendiente de pago" a la etapa
+// "Mercado pago", y su campo "Medio De Pago" cambia de "Pendiente de pago"
+// a "Mercado Pago" (mismo lead, no se duplica). Si el lead nunca llegó a
+// crearse, se crea ahora como respaldo.
 async function confirmar(sb: SupabaseClient, kommoToken: string, fila: any) {
   const id = fila.id
 
@@ -88,21 +89,23 @@ async function confirmar(sb: SupabaseClient, kommoToken: string, fila: any) {
 
   const yaVendido = fila.kommo_estado === 'enviado' || fila.kommo_estado === 'enviado_con_aviso'
 
-  // 1) El lead ya existe: solo se le cambia el campo "Medio De Pago".
+  // 1) El lead ya existe: solo se le cambia la etapa y el campo "Medio De Pago".
   if (fila.kommo_lead_id && yaVendido) {
-    let kommoResumen = '⚠️ Kommo: el cambio de medio de pago no se confirmó'
+    let kommoResumen = '⚠️ Kommo: el avance no se confirmó'
     try {
-      const ok = await marcarMetodoPago(sb, kommoToken, Number(fila.kommo_lead_id), 'enum_mercadopago')
+      const okEtapa = await moverLeadAEstado(sb, kommoToken, Number(fila.kommo_lead_id), 'status_mercadopago')
+      const okCampo = await marcarMetodoPago(sb, kommoToken, Number(fila.kommo_lead_id), 'enum_mercadopago')
+      const ok = okEtapa && okCampo
       await sb
         .from('pedidos')
         .update({ kommo_estado: ok ? 'enviado' : 'enviado_con_aviso', kommo_enviado_en: new Date().toISOString() })
         .eq('id', id)
       await sb
         .from('sync_log')
-        .insert({ pedido_id: id, destino: 'kommo', estado: ok ? 'ok' : 'aviso', detalle: `Lead ${fila.kommo_lead_id}: medio de pago → Mercado Pago` })
+        .insert({ pedido_id: id, destino: 'kommo', estado: ok ? 'ok' : 'aviso', detalle: `Lead ${fila.kommo_lead_id}: etapa → Mercado Pago` })
       kommoResumen = ok
-        ? `✅ Kommo: <a href="${enlaceVentaKommo(fila.kommo_lead_id)}">lead ${fila.kommo_lead_id}</a> quedó como "Mercado Pago"`
-        : '⚠️ Kommo: no confirmó el cambio de medio de pago'
+        ? `✅ Kommo: <a href="${enlaceVentaKommo(fila.kommo_lead_id)}">lead ${fila.kommo_lead_id}</a> movido a la etapa "Mercado Pago"`
+        : '⚠️ Kommo: no confirmó el avance a la etapa "Mercado Pago"'
     } catch (err) {
       const detalle = err instanceof Error ? err.message : String(err)
       console.error('Fallo al confirmar el pago en Kommo:', detalle)

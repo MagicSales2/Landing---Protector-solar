@@ -275,14 +275,15 @@ Deno.serve(async (req) => {
       }
     }
 
-    // El lead entra a Kommo de inmediato (etapa "Mercado pago") con el campo
-    // "Medio De Pago" = "Pendiente de pago", para poder hacer seguimiento
-    // mientras el cliente no pague. Cuando el pago se confirme, confirmar-pago
-    // cambia ese MISMO lead a "Medio De Pago" = "Mercado Pago".
+    // El lead entra a Kommo de inmediato a la etapa "Mercado pago - Pendiente de
+    // pago" (esperando el pago), con el campo "Medio De Pago" = "Pendiente de
+    // pago". Cuando el pago se confirme, confirmar-pago mueve ese MISMO lead a la
+    // etapa "Mercado pago" (y el campo pasa a "Mercado Pago").
     let kommoResumen = ''
     try {
       const { leadId, contactId, camposPendientes } = await enviarAKommo(sb, kommoToken, pedido, {
         metodoPagoClave: 'enum_pendiente_pago',
+        statusClave: 'status_mercadopago_pendiente',
         linkPago: initPoint ? String(initPoint) : undefined,
       })
       const aviso = camposPendientes.length ? ` · OJO: campo de producto/medio de pago no confirmado por Kommo` : ''

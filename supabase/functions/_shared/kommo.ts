@@ -47,7 +47,7 @@ export async function enviarAKommo(
   sb: SupabaseClient,
   token: string,
   pedido: ResumenPedido,
-  opciones: { metodoPagoClave?: string; linkPago?: string } = {},
+  opciones: { metodoPagoClave?: string; linkPago?: string; statusClave?: string } = {},
 ): Promise<ResultadoKommo> {
   const { data: filas } = await sb.from('kommo_config').select('clave, valor')
   const cfg: Record<string, string> = {}
@@ -143,8 +143,9 @@ export async function enviarAKommo(
   // pago" para que Kommo pueda mandárselo al cliente por WhatsApp.
   conTexto(campos, 'cf_link_pago', opciones.linkPago || null)
 
-  const statusId =
-    pedido.metodoPago === 'Contra Entrega'
+  const statusId = opciones.statusClave
+    ? num(opciones.statusClave) || num('status_mercadopago')
+    : pedido.metodoPago === 'Contra Entrega'
       ? num(ETAPA_POR_CANTIDAD[pedido.cantidad] ?? 'status_contraentrega_1')
       : num('status_mercadopago')
 
