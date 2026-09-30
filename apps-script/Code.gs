@@ -41,7 +41,8 @@ var CABECERAS = [
 ];
 
 // Columna(es) que, si el dueño las edita a mano, se propagan a la base y a Kommo.
-var EDITABLES = ['Estado', 'Celular', 'Ciudad', 'Departamento', 'Direccion', 'Direccion 2'];
+// Admite las variantes con tilde (pestaña manual) y sin tilde (pestaña "Pedidos").
+var EDITABLES = ['Estado', 'Celular', 'Ciudad', 'Departamento', 'Direccion', 'Direccion 2', 'Dirección', 'Dirección Entrega', 'Dirección 2'];
 
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
@@ -104,22 +105,25 @@ function instalarDisparador() {
 }
 
 // ── Dirección: HOJA (edición manual) → SISTEMA ──────────────────────────────
-// Detecta el cambio en una celda y, si es una columna "editable", avisa al
-// sistema para que actualice la base de datos y el embudo de Kommo.
+// Detecta el cambio en una celda de CUALQUIER pestaña que tenga una columna
+// "editable" (Estado, Celular...) y avisa al sistema. El pedido se identifica
+// por la columna "ID" de esa misma pestaña (ya sea "PED-XXXX-XXXX" o un
+// nombre de lead en Kommo que lo contenga).
 function onEdit(e) {
   try {
     var range = e.range;
     var hoja = range.getSheet();
-    if (hoja.getName() !== CONFIG.hoja) return;
     if (range.getRow() < 2) return;
 
-    var idx = indiceColumnas_();
     var colNombre = String(hoja.getRange(1, range.getColumn()).getValue()).trim();
     if (EDITABLES.indexOf(colNombre) === -1) return;
 
-    var colId = idx['ID'];
-    if (colId === undefined) return;
-    var orderId = String(hoja.getRange(range.getRow(), colId + 1).getValue()).trim();
+    var headers = hoja.getRange(1, 1, 1, Math.max(hoja.getLastColumn(), 1)).getValues()[0];
+    var colId = headers.indexOf('ID');
+    if (colId === -1) return;
+    var celdaId = String(hoja.getRange(range.getRow(), colId + 1).getValue()).trim();
+    var extraido = celdaId.match(/PED-[A-Z0-9]{4}-[A-Z0-9]{4}/);
+    var orderId = extraido ? extraido[0] : celdaId;
     if (!orderId) return;
 
     var valor = String(range.getValue()).trim();
@@ -147,6 +151,26 @@ function enviarCambio_(orderId, cambios) {
     throw new Error('El sistema respondió ' + resp.getResponseCode() + ': ' + resp.getContentText().slice(0, 200));
   }
   return JSON.parse(resp.getContentText());
+}
+
+// ── AUTO-INSTALACIÓN ────────────────────────────────────────────────────────
+// Al abrir la URL de la aplicación web (https://.../exec) en el navegador se
+// ejecuta doGet y, si falta, instala el disparador de ediciones automáticamente.
+// Así olvidarse del paso manual de instalar el trigger.
+function doGet() {
+  try {
+    setupCabeceras();
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var existentes = ScriptApp.getProjectTriggers();
+    var ya = false;
+    for (var i = 0; i < existentes.length; i++) {
+      if (existentes[i].getHandlerFunction() === 'onEdit') { ya = true; break; }
+    }
+    if (!ya) ScriptApp.newTrigger('onEdit').forSpreadsheet(ss).onEdit().create();
+    return respuesta_(200, { ok: true, disparador: ya ? 'ya instalado' : 'instalado ahora' });
+  } catch (err) {
+    return respuesta_(500, { ok: false, error: String(err) });
+  }
 }
 
 // ── Dirección: SISTEMA → HOJA ───────────────────────────────────────────────

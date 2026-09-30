@@ -13,7 +13,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { moverLeadAEstado } from '../_shared/kommo.ts'
 import { cancelarGuia } from '../_shared/envia.ts'
 import { enviarTelegram } from '../_shared/telegram.ts'
-import { enviarFilaASheed, leerConfigSheets } from '../_shared/sheets.ts'
+import { enviarFilaASheed, leerConfigSheets, normalizarCelular } from '../_shared/sheets.ts'
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -21,34 +21,44 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-// Columna de la hoja -> columna de la base + campo de Kommo (id).
-const MAPA_COLUMNA: Record<string, { db: string; kommo?: string }> = {
-  Celular: { db: 'client_phone', kommo: '543554' },
-  Ciudad: { db: 'city', kommo: '1430725' },
-  Departamento: { db: 'department', kommo: '1430727' },
-  Direccion: { db: 'address' },
-  'Direccion 2': { db: 'address2', kommo: '629579' },
-}
-
-// Texto del estado en la hoja -> (status de la base, clave de etapa en
-// kommo_config, o vacío si no mueve nada).
-function mapearEstado(texto: string): { db: string; claveEtapa: string; mover: boolean } {
-  const e = (texto || '')
+// Quita acentos, pasa a minúsculas y colapsa espacios: "Dirección 2" -> "direccion 2".
+function normalizar(texto: string): string {
+  return (texto ?? '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase()
+}
+
+// Columna (normalizada) de la hoja -> columna de la base + campo de Kommo (id).
+const MAPA_COLUMNA: Record<string, { db: string; kommo?: string }> = {
+  celular: { db: 'client_phone', kommo: '543554' },
+  ciudad: { db: 'city', kommo: '1430725' },
+  departamento: { db: 'department', kommo: '1430727' },
+  direccion: { db: 'address' },
+  'direccion entrega': { db: 'address' },
+  'direccion 2': { db: 'address2', kommo: '629579' },
+}
+
+// Texto del estado en la hoja -> (status de la base, clave de etapa en
+// kommo_config, o vacío si no mueve nada).
+function mapearEstado(texto: string): { db: string; claveEtapa: string; mover: boolean } {
+  const e = normalizar(texto)
   switch (e) {
     case 'impreso':
       return { db: 'confirmed', claveEtapa: '', mover: false }
+    case 'en camino':
     case 'enviado':
+    case 'despachado':
       return { db: 'shipped', claveEtapa: 'status_despachado', mover: true }
     case 'entregado':
       return { db: 'delivered', claveEtapa: 'status_entregado', mover: true }
     case 'espera de pago':
       return { db: 'pendiente_pago', claveEtapa: 'status_espera_pago', mover: true }
     case 'cancelado':
+    case 'venta perdida':
+    case 'ventas perdidas':
       return { db: 'cancelled', claveEtapa: 'status_cancelado', mover: true }
     case 'mercado pago':
       return { db: 'pagado', claveEtapa: 'status_mercadopago', mover: true }
@@ -101,18 +111,19 @@ Deno.serve(async (req) => {
 
   for (const c of cambios) {
     const columna = String(c?.columna ?? '').trim()
-    const valor = String(c?.valor ?? '').trim()
+    let valor = String(c?.valor ?? '').trim()
     if (!columna) continue
 
-    if (columna === 'Estado') {
+    if (normalizar(columna) === 'estado') {
       cambioEstado = mapearEstado(valor)
       if (cambioEstado.db) camposDB.status = cambioEstado.db
       resumen.push(`Estado → ${valor}`)
       continue
     }
 
-    const mapa = MAPA_COLUMNA[columna]
+    const mapa = MAPA_COLUMNA[normalizar(columna)]
     if (!mapa) continue
+    if (mapa.db === 'client_phone') valor = normalizarCelular(valor)
     camposDB[mapa.db] = valor || null
     resumen.push(`${columna} → ${valor || '(vacío)'}`)
   }
@@ -126,12 +137,14 @@ Deno.serve(async (req) => {
   // ── Kommo: campos de dirección / celular avisados desde la hoja ─────────
   let kommoCampos: { field_id: number; values: { value: string }[] }[] | null = null
   for (const c of cambios) {
-    const mapa = MAPA_COLUMNA[String(c?.columna ?? '')]
+    const mapa = MAPA_COLUMNA[normalizar(String(c?.columna ?? ''))]
     if (mapa?.kommo && fila.kommo_lead_id) {
       kommoCampos = kommoCampos ?? []
+      let valor = String(c?.valor ?? '').trim()
+      if (mapa.kommo === '543554') valor = normalizarCelular(valor)
       kommoCampos.push({
         field_id: Number(mapa.kommo),
-        values: [{ value: String(c?.valor ?? '').trim() || ' ' }],
+        values: [{ value: valor || ' ' }],
       })
     }
   }

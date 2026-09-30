@@ -29,6 +29,12 @@ export function estadoSheets(fila: any): string {
   }
 }
 
+export function normalizarCelular(valor: string): string {
+  const n = (valor ?? '').replace(/\D/g, '')
+  if (n.length === 12 && n.startsWith('57')) return n.slice(2)
+  return n
+}
+
 export async function leerConfigSheets(sb: SupabaseClient): Promise<Record<string, string>> {
   const { data } = await sb.from('config_sheets').select('clave, valor')
   const cfg: Record<string, string> = {}
@@ -57,7 +63,7 @@ export async function enviarFilaASheed(sb: SupabaseClient, pedidoId: string): Pr
           Numero: fila.numero ?? '',
           Fecha: fila.created_at ? new Date(fila.created_at).toISOString() : '',
           Cliente: fila.client_name ?? '',
-          Celular: fila.client_phone ?? '',
+          Celular: normalizarCelular(fila.client_phone ?? ''),
           Correo: fila.client_email ?? '',
           Documento: fila.document_id ?? '',
           Departamento: fila.department ?? '',
