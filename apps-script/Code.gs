@@ -264,7 +264,7 @@ function escribirHoja1_(pedido, orderId) {
     };
 
     p('Lead', orderId);
-    p('Producto', pedido['Oferta']);
+    p('Producto', 'Protector solar x' + String(pedido['Cantidad'] || ''));
     p('Dirección Entrega', pedido['Direccion']);
     p('Dirección 2', pedido['Direccion 2']);
     p('Medio de Pago', pedido['Medio de pago']);
