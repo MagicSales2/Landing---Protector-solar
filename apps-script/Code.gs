@@ -35,7 +35,7 @@ var CONFIG = {
 
 // Cada vez que publiques una versión nueva, cambia este número por +1
 // (v3, v4, ...). Sirve para verificar desde el servidor cuál está activa.
-var VERSION = 'v4';
+var VERSION = 'v6';
 
 // Columnas que el sistema conoce y mantiene sincronizadas.
 var CABECERAS = [
@@ -239,10 +239,12 @@ function obtenerHoja1_() {
 }
 
 function asegurarCabeceras1_(hoja) {
-  // IMPORTANTE: la fila 1 SIEMPRE lleva las cabeceras correctas. Si una prueba
-  // antigua dejó datos en ella, se restauran las cabeceras (los datos reales
-  // están en las filas 2 en adelante).
-  hoja.getRange(1, 1, 1, CABECERAS1.length).setValues([CABECERAS1]);
+  // IMPORTANTE: la fila 1 SIEMPRE lleva las cabeceras correctas. Se limpia y
+  // se escribe el encabezado aunque una prueba vieja haya dejado basura ahí
+  // (los datos reales van siempre en filas 2 en adelante).
+  var r1 = hoja.getRange(1, 1, 1, CABECERAS1.length);
+  r1.clear();
+  r1.setValues([CABECERAS1]);
 }
 
 // "Estado" como corresponde en tu hoja 1: 'nuevo' cuando llega, y 'error'
@@ -256,8 +258,9 @@ function estadoHoja1_(pedido) {
 
 function escribirHoja1_(pedido, orderId) {
   try {
+    var diagn = '';
     var hoja1 = obtenerHoja1_();
-    asegurarCabeceras1_(hoja1);
+    try { asegurarCabeceras1_(hoja1); } catch (e) { diagn += 'H:' + String(e); }
     var fila1 = hoja1.getRange(1, 1, 1, Math.max(hoja1.getLastColumn(), 1)).getValues()[0];
     var idx = {};
     for (var c = 0; c < fila1.length; c++) idx[String(fila1[c]).trim()] = c;
@@ -273,20 +276,34 @@ function escribirHoja1_(pedido, orderId) {
 
     var leadId = String(pedido['Lead Kommo'] || '').trim();
 
-    // Campo A (Lead): enlace directo a la venta en Kommo con su nombre.
+    // Campo A (Lead): ENLACE DIRECTO a la venta en Kommo. Se pone primero el
+    // enlace "incrustado" (texto azul clickeable) y se verifica; si no quedara,
+    // plan B: la URL como texto (Google la convierte en enlace automáticamente).
+    var tipoA = 'texto';
     if (idx['Lead'] !== undefined) {
-      var celdaLead = hoja1.getRange(fila, idx['Lead'] + 1);
-      if (leadId) {
-        var urlLead = 'https://magiapastelerta4.kommo.com/leads/detail/' + leadId;
-        celdaLead.setFormula('=HYPERLINK("' + urlLead + '","' + etiqueta.replace(/"/g, '""') + '")');
-        var mostrar = String(celdaLead.getDisplayValue());
-        if (mostrar.indexOf('#') === 0) {
-          // Si el idioma de la hoja rechazara la fórmula, ponemos el enlace
-          // directo (se ve igual: texto azul clickeable).
-          celdaLead.setRichTextValue(SpreadsheetApp.newRichTextValue().setText(etiqueta).setLinkUrl(urlLead).build());
+      try {
+        var celdaLead = hoja1.getRange(fila, idx['Lead'] + 1);
+        if (leadId) {
+          var urlLead = 'https://magiapastelerta4.kommo.com/leads/detail/' + leadId;
+          celdaLead.setValue(etiqueta);
+          celdaLead.setRichTextValue(SpreadsheetApp.newRichTextValue()
+            .setText(etiqueta)
+            .setLinkUrl(urlLead)
+            .build());
+          var urlPuesta = null;
+          try { urlPuesta = celdaLead.getRichTextValue().getLinkUrl(); } catch (e) { }
+          if (urlPuesta) {
+            tipoA = 'enlace';
+          } else {
+            celdaLead.setValue(urlLead); // la URL visible también es clickeable.
+            tipoA = 'url';
+          }
+        } else {
+          celdaLead.setValue(etiqueta);
         }
-      } else {
-        celdaLead.setValue(etiqueta);
+      } catch (e) {
+        try { hoja1.getRange(fila, idx['Lead'] + 1).setValue(urlLead || etiqueta); } catch (e2) { }
+        tipoA = 'error:' + String(e);
       }
     }
 
@@ -311,9 +328,35 @@ function escribirHoja1_(pedido, orderId) {
     }
 
     if (idx['Estado'] !== undefined) hoja1.getRange(fila, idx['Estado'] + 1).setValue(estadoHoja1_(pedido));
+
+    // Limpia filas duplicadas del mismo pedido que hayan quedado de pruebas
+    // viejas: deja solo UNA fila (la de arriba, que acabamos de escribir).
+    limpiarDuplicadosHoja1_(hoja1, fila, orderId);
+
+    try { hoja1.getRange(1, 26).setValue((diagn ? diagn + ' | ' : '') + 'A:' + tipoA + ' | ' + VERSION); } catch (e) { }
   } catch (err) {
     try { hoja1.getRange(1, 26).setValue('ERR: ' + String(err)); } catch (e) { }
   }
+}
+
+function limpiarDuplicadosHoja1_(hoja, filaActual, orderId) {
+  try {
+    var fila1 = hoja.getRange(1, 1, 1, Math.max(hoja.getLastColumn(), 1)).getValues()[0];
+    var colLead = fila1.indexOf('Lead');
+    var colId = fila1.indexOf('ID');
+    var ultima = Math.max(hoja.getLastRow(), 2);
+    for (var f = ultima; f >= 2; f--) {
+      if (f === filaActual) continue;
+      var coincide = false;
+      if (colLead !== -1) {
+        if (String(hoja.getRange(f, colLead + 1).getValue()).toUpperCase().indexOf(orderId.toUpperCase()) !== -1) coincide = true;
+      }
+      if (colId !== -1 && !coincide) {
+        if (String(hoja.getRange(f, colId + 1).getValue()).toUpperCase().indexOf(orderId.toUpperCase()) !== -1) coincide = true;
+      }
+      if (coincide) hoja.deleteRow(f);
+    }
+  } catch (e) { }
 }
 
 function buscarFilaHoja1_(hoja, orderId) {
