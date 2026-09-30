@@ -80,7 +80,7 @@ function mensajeVentas(r: ResumenVentas, nombre: string): string {
     `▸ 💰 Aún por cobrar: ${r.cePorCobrar}`,
     `▸ ❌ Cancelados: ${r.ceCancelados}`,
     '',
-    `🔵 <b>Mercado Pago</b>:`,
+    `🔵 <b>Wompi</b>:`,
     `▸ ⏳ Pendientes de pago: ${r.mpPendientes}`,
     `▸ 💳 Pagados: ${r.mpPagados} — ${formatearCOP(r.mpSuma)}`,
     r.errores ? '' : `✅ Sin errores`,

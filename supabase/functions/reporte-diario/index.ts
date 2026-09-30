@@ -133,7 +133,7 @@ Deno.serve(async (req) => {
     '🛒 <b>Ventas</b>',
     `Pedidos: ${pedidosTotales} · Facturado: <b>${formatearCOP(facturado)}</b>`,
     `▸ Contra Entrega: ${ceVenta} — ${formatearCOP(ceTotal)}`,
-    `▸ Mercado Pago (pagados): ${mpPagados} — ${formatearCOP(mpTotal)}`,
+    `▸ Wompi (pagados): ${mpPagados} — ${formatearCOP(mpTotal)}`,
     `▸ Pendientes de pago: ${pendientes}`,
     errores ? `⚠️ <b>Errores del día: ${errores}</b>` : '✅ Sin errores',
     '',

@@ -142,8 +142,7 @@ Deno.serve(async (req) => {
   if (departamento.length < 2) problemas.push('departamento')
   if (ciudad.length < 2) problemas.push('ciudad')
   if (direccion.length < 5) problemas.push('direccion')
-  // "Mercado Pago" se acepta solo por compatibilidad con pedidos viejos.
-  if (!['Contra Entrega', 'Wompi', 'Mercado Pago'].includes(metodoPago)) problemas.push('metodo_pago')
+  if (!['Contra Entrega', 'Wompi'].includes(metodoPago)) problemas.push('metodo_pago')
   if (problemas.length) return json({ error: 'Datos incompletos', campos: problemas }, 400)
 
   // --- 2) El precio lo decide la base de datos
@@ -288,7 +287,7 @@ Deno.serve(async (req) => {
     try {
       const { leadId, contactId, camposPendientes } = await enviarAKommo(sb, kommoToken, pedido, {
         metodoPagoClave: 'enum_pendiente_pago',
-        statusClave: 'status_mercadopago_pendiente',
+        statusClave: 'status_pago_online_pendiente',
         linkPago: initPoint ? String(initPoint) : undefined,
       })
       const aviso = camposPendientes.length ? ` · OJO: campo de producto/medio de pago no confirmado por Kommo` : ''

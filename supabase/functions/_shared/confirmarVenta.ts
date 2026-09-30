@@ -1,17 +1,17 @@
 // ============================================================================
 //  LÓGICA COMPARTIDA DE CONFIRMACIÓN DE PAGO
 // ----------------------------------------------------------------------------
-//  Cuando un pago online queda APPROVED (venga de Mercado Pago o de Wompi),
+//  Cuando un pago online queda APPROVED (Wompi lo avisa por webhook),
 //  el pedido:
 //    1) pasa a status "pagado"
-//    2) mueve el lead de Kommo a la etapa "Mercado pago"
+//    2) mueve el lead de Kommo a la etapa "Pago online"
 //       (el campo "Medio De Pago" pasa de "Pendiente de pago" a la opción final)
 //    3) genera la guía de envío SIN recaudo (el dinero ya está)
 //    4) avisa por Telegram
 //    5) sincroniza la Google Sheet
 //
 //  Este módulo lo usan:
-//    - confirmar-pago          → pago confirmado por Mercado Pago
+//    - confirmar-pago          → pago confirmado a mano desde el panel
 //    - confirmar-pago-wompi    → pago confirmado por Wompi
 //
 //  Así las dos pasarelas comparten EXACTAMENTE la misma lógica post-pago.
@@ -108,11 +108,11 @@ function aPedido(row: any): ResumenPedido {
 }
 
 // Marca el pedido como "pagado" y mueve el lead que ya está en Kommo:
-// pasa de la etapa "Mercado pago - Pendiente de pago" a la etapa
-// "Mercado pago", y su campo "Medio De Pago" cambia a la opción final
+// pasa de la etapa "Pago online - Pendiente de pago" a la etapa
+// "Pago online", y su campo "Medio De Pago" cambia a la opción final
 // (mismo lead, no se duplica). Si el lead nunca llegó a crearse, se crea
 // ahora como respaldo.
-export async function confirmarVenta(sb: SupabaseClient, kommoToken: string, fila: any, pasarela: 'mercadopago' | 'wompi') {
+export async function confirmarVenta(sb: SupabaseClient, kommoToken: string, fila: any, pasarela: 'wompi') {
   const id = fila.id
 
   if (fila.status !== 'pagado') {
@@ -125,8 +125,8 @@ export async function confirmarVenta(sb: SupabaseClient, kommoToken: string, fil
   if (fila.kommo_lead_id && yaVendido) {
     let kommoResumen = '⚠️ Kommo: el avance no se confirmó'
     try {
-      const okEtapa = await moverLeadAEstado(sb, kommoToken, Number(fila.kommo_lead_id), 'status_mercadopago')
-      const okCampo = await marcarMetodoPago(sb, kommoToken, Number(fila.kommo_lead_id), 'enum_mercadopago')
+      const okEtapa = await moverLeadAEstado(sb, kommoToken, Number(fila.kommo_lead_id), 'status_pago_online')
+      const okCampo = await marcarMetodoPago(sb, kommoToken, Number(fila.kommo_lead_id), 'enum_wompi')
       const ok = okEtapa && okCampo
       await sb
         .from('pedidos')
@@ -134,10 +134,10 @@ export async function confirmarVenta(sb: SupabaseClient, kommoToken: string, fil
         .eq('id', id)
       await sb
         .from('sync_log')
-        .insert({ pedido_id: id, destino: 'kommo', estado: ok ? 'ok' : 'aviso', detalle: `Lead ${fila.kommo_lead_id}: etapa → Mercado Pago (${pasarela})` })
+        .insert({ pedido_id: id, destino: 'kommo', estado: ok ? 'ok' : 'aviso', detalle: `Lead ${fila.kommo_lead_id}: etapa → Pago online (${pasarela})` })
       kommoResumen = ok
-        ? `✅ Kommo: <a href="${enlaceVentaKommo(fila.kommo_lead_id)}">lead ${fila.kommo_lead_id}</a> movido a la etapa "Mercado Pago"`
-        : '⚠️ Kommo: no confirmó el avance a la etapa "Mercado Pago"'
+        ? `✅ Kommo: <a href="${enlaceVentaKommo(fila.kommo_lead_id)}">lead ${fila.kommo_lead_id}</a> movido a la etapa "Pago online"`
+        : '⚠️ Kommo: no confirmó el avance a la etapa "Pago online"'
     } catch (err) {
       const detalle = err instanceof Error ? err.message : String(err)
       console.error('Fallo al confirmar el pago en Kommo:', detalle)

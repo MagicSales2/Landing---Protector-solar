@@ -4,7 +4,7 @@
 //  (evento "transaction.updated"). Si el pago quedó APPROVED, confirma el
 //  pedido (lo marca pagado, mueve el lead de Kommo, crea la guía sin recaudo,
 //  avisa por Telegram y sincroniza la hoja) usando la MISMA lógica que
-//  confirmar-pago de Mercado Pago (_shared/confirmarVenta.ts).
+//  _shared/confirmarVenta.ts.
 //
 //  Seguridad: se valida la firma del evento (header X-Event-Checksum) con el
 //  "Firma de eventos" de Wompi para confirmar que la notificación es auténtica.
@@ -154,6 +154,6 @@ Deno.serve(async (req) => {
     .update({ wompi_transaction_id: transaccionId || null, wompi_status: 'aprobado' })
     .eq('id', pedido.id)
 
-  // Confirmar la venta (misma lógica que Mercado Pago).
+  // Confirmar la venta (misma lógica de siempre, compartida en _shared).
   return await confirmarVenta(sb, kommoToken, pedido, 'wompi')
 })

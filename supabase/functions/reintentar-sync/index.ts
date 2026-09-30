@@ -70,11 +70,11 @@ async function reintentarKommo(sb: any, kommoToken: string, fila: any): Promise<
   const opciones: any = {}
   if (fila.payment_method !== 'Contra Entrega') {
     if (fila.status === 'pagado') {
-      opciones.metodoPagoClave = 'enum_mercadopago'
-      opciones.statusClave = 'status_mercadopago'
+      opciones.metodoPagoClave = 'enum_wompi'
+      opciones.statusClave = 'status_pago_online'
     } else {
       opciones.metodoPagoClave = 'enum_pendiente_pago'
-      opciones.statusClave = 'status_mercadopago_pendiente'
+      opciones.statusClave = 'status_pago_online_pendiente'
       // El link de Wompi se reconstruye desde el id guardado en el pedido.
       if (fila.wompi_payment_link_id) {
         opciones.linkPago = `https://checkout.wompi.co/l/${fila.wompi_payment_link_id}`

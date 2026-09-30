@@ -134,20 +134,20 @@ export async function enviarAKommo(
   conTexto(rastreo, 'cf_referrer', pedido.referrer)
 
   // Medio de pago: se puede pasar una opción distinta a la normal
-  // (ej. "Pendiente de pago" mientras Mercado Pago no ha confirmado).
-  const claveMetodo = opciones.metodoPagoClave || (pedido.metodoPago === 'Contra Entrega' ? 'enum_contraentrega' : 'enum_mercadopago')
+  // (ej. "Pendiente de pago" mientras Wompi no confirma el pago).
+  const claveMetodo = opciones.metodoPagoClave || (pedido.metodoPago === 'Contra Entrega' ? 'enum_contraentrega' : 'enum_wompi')
   conTexto(campos, 'cf_adiciones', `Protector solar x${pedido.cantidad}`)
   conOpcion('cf_producto', `enum_producto_${pedido.cantidad}`)
   conOpcion('cf_metodo_pago', claveMetodo)
-  // Link único de pago (Mercado Pago): se guarda en el campo "Link de mercado
+  // Link único de pago (Wompi): se guarda en el campo "Link de mercado
   // pago" para que Kommo pueda mandárselo al cliente por WhatsApp.
   conTexto(campos, 'cf_link_pago', opciones.linkPago || null)
 
   const statusId = opciones.statusClave
-    ? num(opciones.statusClave) || num('status_mercadopago')
+    ? num(opciones.statusClave) || num('status_pago_online')
     : pedido.metodoPago === 'Contra Entrega'
       ? num(ETAPA_POR_CANTIDAD[pedido.cantidad] ?? 'status_contraentrega_1')
-      : num('status_mercadopago')
+      : num('status_pago_online')
 
   const base_venta = {
     name: `${cfg.etiqueta_origen || 'Landing'} ${pedido.id} · ${pedido.cantidad} unidad${pedido.cantidad > 1 ? 'es' : ''} · ${pedido.ciudad}`,
@@ -230,7 +230,7 @@ export async function enviarAKommo(
 
 // Confirma el pago de un lead QUE YA EXISTE: no se crea otro, solo se cambia
 // el campo "Medio De Pago" de ese mismo lead (ej. de "Pendiente de pago" a
-// "Mercado Pago"). La automatización de Kommo puede borrar el campo, así que
+// "Wompi"). La automatización de Kommo puede borrar el campo, así que
 // se verifica y se reescribe si hace falta.
 export async function marcarMetodoPago(sb: SupabaseClient, token: string, leadId: number, claveMetodo: string): Promise<boolean> {
   const { data: filas } = await sb.from('kommo_config').select('clave, valor')
