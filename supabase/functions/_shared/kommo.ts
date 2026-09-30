@@ -47,7 +47,7 @@ export async function enviarAKommo(
   sb: SupabaseClient,
   token: string,
   pedido: ResumenPedido,
-  opciones: { metodoPagoClave?: string } = {},
+  opciones: { metodoPagoClave?: string; linkPago?: string } = {},
 ): Promise<ResultadoKommo> {
   const { data: filas } = await sb.from('kommo_config').select('clave, valor')
   const cfg: Record<string, string> = {}
@@ -139,6 +139,9 @@ export async function enviarAKommo(
   conTexto(campos, 'cf_adiciones', `Protector solar x${pedido.cantidad}`)
   conOpcion('cf_producto', `enum_producto_${pedido.cantidad}`)
   conOpcion('cf_metodo_pago', claveMetodo)
+  // Link único de pago (Mercado Pago): se guarda en el campo "Link de mercado
+  // pago" para que Kommo pueda mandárselo al cliente por WhatsApp.
+  conTexto(campos, 'cf_link_pago', opciones.linkPago || null)
 
   const statusId =
     pedido.metodoPago === 'Contra Entrega'
@@ -266,6 +269,48 @@ export async function marcarMetodoPago(sb: SupabaseClient, token: string, leadId
     if (queda) return true
     await dormir(600)
     await escribe()
+    await dormir(600)
+  }
+  return false
+}
+
+// Mueve UNA venta que ya existe a otra etapa del pipeline (ej. a
+// "Enviado/Despachado" cuando el pedido salió a la transportadora).
+// El disparador de WhatsApp de Kommo se dispara con ese movimiento.
+export async function moverLeadAEstado(sb: SupabaseClient, token: string, leadId: number, claveEtapa: string): Promise<boolean> {
+  const { data: filas } = await sb.from('kommo_config').select('clave, valor')
+  const cfg: Record<string, string> = {}
+  for (const fila of filas ?? []) cfg[fila.clave] = fila.valor
+
+  const statusId = Number(cfg[claveEtapa] || 0)
+  const leadIdNum = Number(leadId)
+  if (!statusId || !leadIdNum) return false
+
+  const base = `https://${cfg.subdominio}.kommo.com/api/v4`
+  const dormir = (ms: number) => new Promise((res) => setTimeout(res, ms))
+  const call = async (ruta: string, opciones: RequestInit = {}): Promise<any> => {
+    const res = await fetch(`${base}${ruta}`, {
+      ...opciones,
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(opciones.headers ?? {}) },
+    })
+    if (res.status === 204) return null
+    const cuerpo = await res.text()
+    if (!res.ok) throw new Error(`Kommo ${res.status}: ${cuerpo.slice(0, 300)}`)
+    return cuerpo ? JSON.parse(cuerpo) : null
+  }
+
+  const mueve = () =>
+    call(`/leads/${leadIdNum}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ id: leadIdNum, status_id: statusId }),
+    })
+
+  await mueve()
+  for (let i = 0; i < 3; i++) {
+    const revisa = await call(`/leads/${leadIdNum}`)
+    if (Number(revisa?.status_id) === statusId) return true
+    await dormir(600)
+    await mueve()
     await dormir(600)
   }
   return false

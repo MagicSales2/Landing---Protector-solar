@@ -217,6 +217,27 @@ export async function updateOrderStatusInSupabase(orderId: string, status: strin
   return true;
 }
 
+// Cambia el estado desde el panel y, si el estado es "shipped", mueve también
+// la venta en Kommo a la etapa "Enviado" (dispara el WhatsApp con la guía).
+// Devuelve { ok, error?, kommoMovido?, kommoMensaje? }.
+export async function actualizarEstadoPedido(
+  orderId: string,
+  status: string,
+): Promise<{ ok: boolean; error?: string; kommoMovido?: boolean; kommoMensaje?: string }> {
+  if (!supabase) return { ok: false, error: 'Sin conexión con la base de datos.' };
+  const { data, error } = await supabase.functions.invoke('actualizar-estado', { body: { orderId, status } });
+  if (error || !data?.ok) {
+    let mensaje = 'No se pudo actualizar el estado.';
+    try {
+      const detalle = (error as any)?.context ? await (error as any).context.json() : data;
+      if (detalle?.error) mensaje = detalle.error;
+    } catch { /* sin más detalle */ }
+    console.error('Error en actualizar-estado:', mensaje);
+    return { ok: false, error: mensaje };
+  }
+  return data;
+}
+
 export async function deleteOrderFromSupabase(orderId: string): Promise<boolean> {
   if (!supabase) return false;
   const { error } = await supabase.from('pedidos').delete().eq('id', orderId);

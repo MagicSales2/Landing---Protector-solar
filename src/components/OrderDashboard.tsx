@@ -4,6 +4,7 @@ import { Order } from '../types';
 import {
   getOrdersFromSupabase,
   updateOrderStatusInSupabase,
+  actualizarEstadoPedido,
   deleteOrderFromSupabase,
   signInAdmin,
   signOutAdmin,
@@ -72,7 +73,14 @@ export default function OrderDashboard({ ordersUpdatedToggle, onOrderDelete, isO
 
   const handleUpdateStatus = async (id: string, newStatus: Order['status']) => {
     setOrders(prev => prev.map(o => o.id === id ? { ...o, status: newStatus } : o));
-    await updateOrderStatusInSupabase(id, newStatus);
+    const res = await actualizarEstadoPedido(id, newStatus);
+    if (!res.ok) {
+      // Respaldo: si la función falla, al menos se guarda el estado directo.
+      await updateOrderStatusInSupabase(id, newStatus);
+      alert(res.error || 'No se pudo actualizar el estado.');
+    } else if (newStatus === 'shipped' && !res.kommoMovido && res.kommoMensaje) {
+      alert(res.kommoMensaje.replace(/<[^>]+>/g, ''));
+    }
   };
 
   const handleDeleteOrder = async (id: string) => {

@@ -283,6 +283,7 @@ Deno.serve(async (req) => {
     try {
       const { leadId, contactId, camposPendientes } = await enviarAKommo(sb, kommoToken, pedido, {
         metodoPagoClave: 'enum_pendiente_pago',
+        linkPago: initPoint ? String(initPoint) : undefined,
       })
       const aviso = camposPendientes.length ? ` · OJO: campo de producto/medio de pago no confirmado por Kommo` : ''
       await sb
