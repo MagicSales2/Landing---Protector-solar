@@ -259,12 +259,31 @@ function escribirHoja1_(pedido, orderId) {
     for (var c = 0; c < fila1.length; c++) idx[String(fila1[c]).trim()] = c;
 
     var fila = buscarFilaHoja1_(hoja1, orderId);
+
+    var cantidad = String(pedido['Cantidad'] || '').trim();
+    var ciudad = String(pedido['Ciudad'] || '').trim();
+    var unidad = cantidad === '1' ? 'unidad' : 'unidades';
+    var etiqueta = 'Landing ' + orderId + ' · ' + cantidad + ' ' + unidad;
+    if (ciudad) etiqueta += ' · ' + ciudad;
+
+    var leadId = String(pedido['Lead Kommo'] || '').trim();
+
+    // Campo A (Lead): enlace a la venta en Kommo con el nombre del pedido.
+    if (idx['Lead'] !== undefined) {
+      var celdaLead = hoja1.getRange(fila, idx['Lead'] + 1);
+      if (leadId) {
+        var urlLead = 'https://magiapastelerta4.kommo.com/leads/detail/' + leadId;
+        celdaLead.setFormula('=HIPERVINCULO("' + urlLead + '" ; "' + etiqueta.replace(/"/g, '""') + '")');
+      } else {
+        celdaLead.setValue(orderId);
+      }
+    }
+
     var p = function (cabecera, valor) {
       if (idx[cabecera] !== undefined && valor != null) hoja1.getRange(fila, idx[cabecera] + 1).setValue(valor);
     };
 
-    p('Lead', orderId);
-    p('Producto', 'Protector solar x' + String(pedido['Cantidad'] || ''));
+    p('Producto', etiqueta);
     p('Dirección Entrega', pedido['Direccion']);
     p('Dirección 2', pedido['Direccion 2']);
     p('Medio de Pago', pedido['Medio de pago']);
@@ -274,12 +293,11 @@ function escribirHoja1_(pedido, orderId) {
     p('Transportadora', pedido['Guia carrier']);
     p('Costo domi', pedido['Total']);
 
-    var leadId = String(pedido['Lead Kommo'] || '').trim();
     if (idx['ID'] !== undefined) {
       var celdaId = hoja1.getRange(fila, idx['ID'] + 1);
       if (leadId) {
         celdaId.setValue(leadId);
-        celdaId.setNote('https://magiapastelerta4.kommo.com/leads/list2/' + leadId);
+        celdaId.setNote('https://magiapastelerta4.kommo.com/leads/detail/' + leadId);
       } else if (String(celdaId.getValue()).trim() === '') {
         celdaId.setValue('');
       }

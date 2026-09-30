@@ -223,7 +223,16 @@ export async function cotizarGuia(
       console.warn(`Cotización ${carrier} falló:`, err instanceof Error ? err.message : err)
     }
   }
-  return opciones.sort((a, b) => a.totalPrice - b.totalPrice || a.dropOff - b.dropOff)
+
+  // Preferencia: primero las transportadoras según el orden configurado
+  // (config_envia.transportadoras), y dentro de cada una la tarifa más barata.
+  // Así "coordinadora" se usa primero por defecto y el resto son respaldo.
+  const prioridad = new Map(transportadoras.map((t, i) => [String(t).toLowerCase(), i]))
+  return opciones.sort((a, b) => {
+    const pa = prioridad.has(String(a.carrier).toLowerCase()) ? prioridad.get(String(a.carrier).toLowerCase())! : Number.MAX_SAFE_INTEGER
+    const pb = prioridad.has(String(b.carrier).toLowerCase()) ? prioridad.get(String(b.carrier).toLowerCase())! : Number.MAX_SAFE_INTEGER
+    return pa - pb || a.totalPrice - b.totalPrice || a.dropOff - b.dropOff
+  })
 }
 
 /* Genera la guía con la transportadora indicada. Devuelve el número, el
