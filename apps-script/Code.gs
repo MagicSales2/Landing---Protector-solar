@@ -63,7 +63,8 @@ function obtenerHoja_() {
 // Crea (si faltan) las cabeceras en la fila 1 de la pestaña "Pedidos".
 function setupCabeceras() {
   var hoja = obtenerHoja_();
-  var fila1 = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0];
+  var ultima = hoja.getLastColumn();
+  var fila1 = ultima > 0 ? hoja.getRange(1, 1, 1, ultima).getValues()[0] : [];
   var porAgregar = [];
   for (var i = 0; i < CABECERAS.length; i++) {
     var nombre = CABECERAS[i];
@@ -71,7 +72,8 @@ function setupCabeceras() {
     if (!existe) porAgregar.push(nombre);
   }
   if (porAgregar.length) {
-    hoja.getRange(1, hoja.getLastColumn() + 1, 1, porAgregar.length).setValues([porAgregar]);
+    var desde = hoja.getLastColumn() > 0 ? hoja.getLastColumn() + 1 : 1;
+    hoja.getRange(1, desde, 1, porAgregar.length).setValues([porAgregar]);
   }
   SpreadsheetApp.getActiveSpreadsheet().toast('Cabeceras listas en la pestaña «' + CONFIG.hoja + '»', 'Magic Sync');
 }

@@ -84,6 +84,18 @@ export async function enviarFilaASheed(sb: SupabaseClient, pedidoId: string): Pr
       await sb.from('sync_log').insert({ pedido_id: pedidoId, destino: 'sheets', estado: 'error', detalle })
       return { estado: 'error', detalle }
     }
+    const texto = await res.text()
+    let respuesta: any = null
+    try {
+      respuesta = JSON.parse(texto)
+    } catch {
+      respuesta = texto
+    }
+    if (typeof respuesta === 'object' && respuesta && respuesta.ok === false) {
+      const detalle = `Sheets: ${String(respuesta.error ?? respuesta).slice(0, 300)}`
+      await sb.from('sync_log').insert({ pedido_id: pedidoId, destino: 'sheets', estado: 'error', detalle })
+      return { estado: 'error', detalle }
+    }
     return { estado: 'ok', detalle: 'Fila sincronizada en la hoja' }
   } catch (err) {
     const detalle = err instanceof Error ? err.message : String(err)
