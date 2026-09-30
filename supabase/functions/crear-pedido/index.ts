@@ -18,6 +18,7 @@ import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-
 import { enviarAKommo, ResumenPedido } from '../_shared/kommo.ts'
 import { enviarTelegram, etiquetaVentaKommo } from '../_shared/telegram.ts'
 import { generarGuiaPedido } from '../_shared/envia.ts'
+import { avisoSheets } from '../_shared/sheets.ts'
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -308,6 +309,7 @@ Deno.serve(async (req) => {
       await sb.from('sync_log').insert({ pedido_id: id, destino: 'kommo', estado: 'error', detalle: detalle.slice(0, 500) })
     }
 
+    avisoSheets(sb, id)
     return json({ ok: true, orderId: id, numero: guardado.numero, total: guardado.total_price, initPoint, mercadopagoUrl: oferta.mercadopago_url || '' })
   }
 
@@ -385,5 +387,6 @@ Deno.serve(async (req) => {
     ].join('\n'),
   )
 
+  avisoSheets(sb, id)
   return json({ ok: true, orderId: id, numero: guardado.numero, total: guardado.total_price, guia: guiaRespuesta })
 })

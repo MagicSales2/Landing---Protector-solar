@@ -18,6 +18,7 @@ import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-
 import { enviarAKommo, marcarMetodoPago, moverLeadAEstado, ResumenPedido } from '../_shared/kommo.ts'
 import { enviarTelegram, enlaceVentaKommo, etiquetaVentaKommo } from '../_shared/telegram.ts'
 import { generarGuiaPedido } from '../_shared/envia.ts'
+import { avisoSheets } from '../_shared/sheets.ts'
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -150,6 +151,7 @@ async function confirmar(sb: SupabaseClient, kommoToken: string, fila: any) {
     // Guía de envío (pago ya aprobado) + aviso por Telegram.
     const guiaMP = await guiaParaMP(sb, kommoToken, fila)
     await avisarPagoConfirmado(fila, kommoResumen, guiaMP.resumen)
+    avisoSheets(sb, id)
     return json({
       ok: true,
       orderId: id,
@@ -190,6 +192,7 @@ async function confirmar(sb: SupabaseClient, kommoToken: string, fila: any) {
   // Guía de envío (pago ya aprobado) + aviso por Telegram.
   const guiaMP = await guiaParaMP(sb, kommoToken, fila)
   await avisarPagoConfirmado(fila, kommoResumen, guiaMP.resumen)
+  avisoSheets(sb, id)
 
   return json({
     ok: true,

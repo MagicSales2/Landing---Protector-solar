@@ -13,6 +13,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { moverLeadAEstado } from '../_shared/kommo.ts'
 import { enviarTelegram, enlaceVentaKommo } from '../_shared/telegram.ts'
 import { cancelarGuia } from '../_shared/envia.ts'
+import { avisoSheets } from '../_shared/sheets.ts'
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -150,6 +151,7 @@ Deno.serve(async (req) => {
     }
   }
 
+  avisoSheets(sb, orderId)
   return json({
     ok: true,
     orderId,
