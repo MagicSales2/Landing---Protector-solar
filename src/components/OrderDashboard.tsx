@@ -78,8 +78,12 @@ export default function OrderDashboard({ ordersUpdatedToggle, onOrderDelete, isO
       // Respaldo: si la función falla, al menos se guarda el estado directo.
       await updateOrderStatusInSupabase(id, newStatus);
       alert(res.error || 'No se pudo actualizar el estado.');
-    } else if (newStatus === 'shipped' && !res.kommoMovido && res.kommoMensaje) {
-      alert(res.kommoMensaje.replace(/<[^>]+>/g, ''));
+    } else if (newStatus === 'shipped') {
+      if (res.kommoMovido) {
+        mostrarAviso(`Pedido ${id} despachado. Venta movida a "Enviado" en Kommo → se enviará el WhatsApp con la guía.`, 'ok');
+      } else if (res.kommoMensaje) {
+        alert(res.kommoMensaje.replace(/<[^>]+>/g, ''));
+      }
     }
   };
 
@@ -91,6 +95,13 @@ export default function OrderDashboard({ ordersUpdatedToggle, onOrderDelete, isO
   };
 
   const [confirmando, setConfirmando] = useState<string | null>(null);
+
+  const [aviso, setAviso] = useState<{ texto: string; tipo: 'ok' | 'info' } | null>(null);
+
+  const mostrarAviso = (texto: string, tipo: 'ok' | 'info' = 'ok') => {
+    setAviso({ texto, tipo });
+    window.setTimeout(() => setAviso(null), 8000);
+  };
 
   // Confirma a mano un pedido de Mercado Pago (cuando ya llegó la plata y el
   // sistema no lo detectó solo). Recién ahí manda la venta a Kommo.
@@ -222,6 +233,16 @@ export default function OrderDashboard({ ordersUpdatedToggle, onOrderDelete, isO
                 </button>
               </div>
             </div>
+
+            {aviso && (
+              <div className={`mt-4 px-4 py-3 rounded-lg border text-xs font-bold ${
+                aviso.tipo === 'ok'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : 'bg-blue-50 text-blue-700 border-blue-200'
+              }`}>
+                {aviso.texto}
+              </div>
+            )}
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 py-6">
               <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
@@ -368,6 +389,7 @@ export default function OrderDashboard({ ordersUpdatedToggle, onOrderDelete, isO
                           <select
                             value={o.status}
                             onChange={e => handleUpdateStatus(o.id, e.target.value as Order['status'])}
+                            title="Cambiar estado. Elegir 'Despachado' mueve la venta a la etapa 'Enviado' en Kommo y envía al cliente el WhatsApp con la guía."
                             className={`text-[10px] font-bold px-2.5 py-1 rounded-full border bg-white focus:outline-none outline-none ${
                               o.status === 'new' ? 'text-blue-600 border-blue-200 bg-blue-50' :
                               o.status === 'pendiente_pago' ? 'text-orange-600 border-orange-200 bg-orange-50' :
