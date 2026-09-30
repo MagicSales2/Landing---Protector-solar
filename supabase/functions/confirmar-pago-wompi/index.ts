@@ -6,10 +6,14 @@
 //  avisa por Telegram y sincroniza la hoja) usando la MISMA lógica que
 //  _shared/confirmarVenta.ts.
 //
-//  Seguridad: se valida la firma del evento (header X-Event-Checksum) con el
+//  Además, el GET ?pedido=PED-...&verificar=1 consulta DIRECTAMENTE a la API
+//  de Wompi y confirma el pago si está APPROVED. Es la red de seguridad: si
+//  el webhook se pierde o tarda, el cliente sigue viendo su pago confirmado.
+//
+//  Seguridad: se valida la firma del evento (X-Event-Checksum) con el
 //  "Firma de eventos" de Wompi para confirmar que la notificación es auténtica.
 //  El checksum es SHA256 de:  [valores de signature.properties, sin separador]
-//                            + timestamp (integer)
+//                            + signature.timestamp (integer)
 //                            + firma de eventos (secret)
 // ============================================================================
 
@@ -22,15 +26,56 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+// Pregunta a Wompi si el pedido ya tiene un pago APPROVED. Devuelve null si
+// todavía no hay ninguno, o el id de la transacción si lo hay.
+// OJO: /v1/transactions/ exige(from_date, until_date, page, page_size) o
+// responde 422, así que siempre se mandan.
+async function transaccionAprobada(llavePrivada: string, pedido: any): Promise<string | null> {
+  const desde = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString()
+  const hasta = new Date().toISOString()
+  const buscar = async (filtros: Record<string, string>) => {
+    const q = new URLSearchParams({ from_date: desde, until_date: hasta, page: '1', page_size: '100', ...filtros })
+    const res = await fetch(`https://api.wompi.co/v1/transactions/?${q}`, { headers: { Authorization: `Bearer ${llavePrivada}` } })
+    if (!res.ok) throw new Error(`Wompi ${res.status}: ${(await res.text()).slice(0, 200)}`)
+    const cuerpo = await res.json()
+    return Array.isArray(cuerpo?.data) ? cuerpo.data : []
+  }
+
+  // Primero por referencia (los links nuevos la llevan = id del pedido) y
+  // luego por link de pago (sirve para los links creados antes de eso).
+  let lista: any[] = []
+  try {
+    lista = await buscar({ reference: String(pedido.id) })
+  } catch (err) {
+    console.error('Wompi no respondió al buscar por referencia:', err)
+  }
+  if (!lista.length && pedido.wompi_payment_link_id) {
+    try {
+      lista = await buscar({ payment_link: String(pedido.wompi_payment_link_id) })
+    } catch (err) {
+      console.error('Wompi no respondió al buscar por link de pago:', err)
+    }
+  }
+
+  const centavoEsperado = Math.round(Number(pedido.total_price) * 100)
+  const aprobada = lista
+    .filter((t: any) => String(t?.status ?? '').toUpperCase() === 'APPROVED')
+    // Si el link se pagó por otro monto, no es este pedido.
+    .filter((t: any) => Number(t?.amount_in_cents) === centavoEsperado)
+    .sort((a: any, b: any) => String(b.created_at).localeCompare(String(a.created_at)))[0]
+  return aprobada ? String(aprobada.id) : null
+}
+
 // Extrae un valor anidado del evento usando una ruta como "transaction.id".
 function valorEnRuta(objeto: any, ruta: string): any {
   return ruta.split('.').reduce((acc, parte) => (acc == null ? acc : acc[parte]), objeto)
 }
 
 // Calcula el checksum del evento y lo compara con el que envió Wompi.
+// OJO: el timestamp UNIX va DENTRO del objeto "signature" (no en la raíz).
 async function checksumValido(evento: any, secret: string): Promise<boolean> {
   const props: string[] = evento?.signature?.properties ?? []
-  const timestamp = evento?.timestamp
+  const timestamp = evento?.signature?.timestamp ?? evento?.timestamp
   const recibido = evento?.signature?.checksum
 
   // Sin los datos de firma no se puede validar.
@@ -58,24 +103,57 @@ Deno.serve(async (req) => {
     auth: { persistSession: false },
   })
 
-  // ── Consulta de estado (GET ?pedido=PED-...) ────────────────────────────
+  // ── Consulta de estado (GET ?pedido=PED-... [&verificar=1]) ─────────────
   // La usa la página de gracias para mostrarle al cliente si su pago ya
-  // quedó confirmado. Solo LEE: nunca confirma pagos (eso es del webhook).
+  // quedó confirmado. Con verificar=1 además pregunta a Wompi y confirma el
+  // pago si allí está APPROVED (red de seguridad si el webhook no llegó).
   if (req.method === 'GET') {
-    const pedidoId = new URL(req.url).searchParams.get('pedido')?.trim() || ''
+    const params = new URL(req.url).searchParams
+    const pedidoId = params.get('pedido')?.trim() || ''
+    const verificar = params.get('verificar') === '1'
     if (!pedidoId) return json({ ok: false, error: 'Falta el pedido' }, 400)
     const { data: fila } = await sb
+      .from('pedidos')
+      .select('*')
+      .eq('id', pedidoId)
+      .maybeSingle()
+    if (!fila) return json({ ok: false, estado: 'no_encontrado' }, 404)
+
+    if (verificar && fila.status !== 'pagado' && fila.payment_method !== 'Contra Entrega') {
+      const llavePrivada = Deno.env.get('WOMPI_PRIVATE_KEY') || ''
+      const kommo = Deno.env.get('KOMMO_TOKEN') || ''
+      if (llavePrivada && kommo) {
+        try {
+          const transaccionId = await transaccionAprobada(llavePrivada, fila)
+          if (transaccionId) {
+            console.log(`Pago de ${fila.id} confirmado verificando contra la API de Wompi`)
+            await sb
+              .from('pedidos')
+              .update({ wompi_transaction_id: transaccionId, wompi_status: 'aprobado' })
+              .eq('id', fila.id)
+            fila.wompi_transaction_id = transaccionId
+            fila.wompi_status = 'aprobado'
+            await confirmarVenta(sb, kommo, fila, 'wompi')
+          }
+        } catch (err) {
+          console.error('Falló la verificación del pago en Wompi:', err)
+        }
+      }
+    }
+
+    // Se vuelve a leer para reflejar lo que confirmó confirmarVenta.
+    const { data: final } = await sb
       .from('pedidos')
       .select('id, status, payment_method, total_price, client_name')
       .eq('id', pedidoId)
       .maybeSingle()
-    if (!fila) return json({ ok: false, estado: 'no_encontrado' }, 404)
+    const f = final ?? fila
     return json({
-      ok: fila.status === 'pagado',
-      orderId: fila.id,
-      estado: fila.status,
-      total: Number(fila.total_price),
-      cliente: fila.client_name,
+      ok: f.status === 'pagado',
+      orderId: f.id,
+      estado: f.status,
+      total: Number(f.total_price),
+      cliente: f.client_name,
     })
   }
 
@@ -135,12 +213,16 @@ Deno.serve(async (req) => {
     const { data } = await sb.from('pedidos').select('*').eq('wompi_payment_link_id', linkId).maybeSingle()
     pedido = data
   }
-  // Respaldo: si por algún motivo el link no quedó guardado, se busca por la
-  // referencia que Wompi devuelve en la transacción.
+  // Respaldo: si el link no quedó guardado, se busca por la referencia, que
+  // para los links creados por esta app es el ID del pedido.
   if (!pedido && transaccion.reference) {
     const ref = String(transaccion.reference).trim()
-    const { data } = await sb.from('pedidos').select('*').eq('wompi_transaction_id', ref).maybeSingle()
-    pedido = data
+    const porReferencia = await sb.from('pedidos').select('*').eq('id', ref).maybeSingle()
+    pedido = porReferencia.data
+    if (!pedido) {
+      const porTransaccion = await sb.from('pedidos').select('*').eq('wompi_transaction_id', ref).maybeSingle()
+      pedido = porTransaccion.data
+    }
   }
 
   if (!pedido) {

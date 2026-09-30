@@ -80,6 +80,9 @@ async function crearLinkWompi(llavePrivada: string, pedido: { id: string; total:
       name: `Pago pedido ${pedido.id}`,
       description: pedido.producto,
       single_use: true,
+      // La referencia es lo que permite encontrar la transacción del pedido
+      // (el webhook la trae y sirve para consultar la API si hace falta).
+      reference: pedido.id,
       amount_in_cents: Math.round(pedido.total * 100),
       currency: 'COP',
       expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),

@@ -30,7 +30,9 @@ export default function PagoGracias() {
     let intentos = 0;
     const consultar = () => {
       intentos += 1;
-      consultarPago(id)
+      // A partir del segundo intento se le pide al servidor que confirme el
+      // pago preguntándole a Wompi (por si el webhook no llegó).
+      consultarPago(id, intentos >= 2)
         .then((res) => {
           setResultado(res);
           if (res.ok && res.estado === 'pagado') {
