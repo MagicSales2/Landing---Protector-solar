@@ -68,6 +68,8 @@ export async function enviarFilaASheed(sb: SupabaseClient, pedidoId: string): Pr
           Documento: fila.document_id ?? '',
           Departamento: fila.department ?? '',
           Ciudad: fila.city ?? '',
+          // Ciudad y Departamento juntos, como en la columna F de "Hoja 1".
+          'Ciudad y Departamento': [fila.city, fila.department].filter(Boolean).join(', '),
           Direccion: fila.address ?? '',
           'Direccion 2': fila.address2 ?? '',
           Notas: fila.notes ?? '',

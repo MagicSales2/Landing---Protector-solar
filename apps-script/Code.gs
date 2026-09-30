@@ -43,13 +43,18 @@ var CABECERAS = [
   'Departamento', 'Ciudad', 'Direccion', 'Direccion 2', 'Notas', 'Oferta',
   'Cantidad', 'Total', 'Medio de pago', 'Estado', 'Lead Kommo',
   'Guia num', 'Guia link', 'Guia carrier', 'Guia estado', 'Guia error',
+  // Ciudad y Departamento juntos en una celda (ej. "Villavicencio, Meta").
+  // Va al final a propósito: no mueve ninguna columna que ya uses.
+  'Ciudad y Departamento',
 ];
 
 // Columnas de tu pestaña manual ("Hoja 1"). El sistema también escribe aquí,
 // con solo estos datos y el estado en su palabra correcta (nuevo / error / …).
+// La F es "Dpto / Ciudad": Ciudad y Departamento juntos en una sola celda
+// (ej. "Villavicencio, Meta"), como la organizaste.
 var CABECERAS1 = [
   'Lead', 'Producto', 'ID', 'Dirección Entrega', 'Dirección 2',
-  'Medio de Pago', 'Nombre Quien Recibe', 'Celular', 'Guia',
+  'Dpto / Ciudad', 'Medio de Pago', 'Nombre Quien Recibe', 'Celular', 'Guia',
   'Transportadora', 'Costo domi', 'Estado',
 ];
 
@@ -269,6 +274,8 @@ function escribirHoja1_(pedido, orderId) {
 
     var cantidad = String(pedido['Cantidad'] || '').trim();
     var ciudad = String(pedido['Ciudad'] || '').trim();
+    var departamento = String(pedido['Departamento'] || '').trim();
+    var ciudadYDepto = [ciudad, departamento].filter(Boolean).join(', ');
     var unidad = cantidad === '1' ? 'unidad' : 'unidades';
     var etiqueta = 'Landing ' + orderId + ' · ' + cantidad + ' ' + unidad;
     if (ciudad) etiqueta += ' · ' + ciudad;
@@ -315,6 +322,7 @@ function escribirHoja1_(pedido, orderId) {
     p('Producto', producto);
     p('Dirección Entrega', pedido['Direccion']);
     p('Dirección 2', pedido['Direccion 2']);
+    p('Dpto / Ciudad', ciudadYDepto);
     p('Medio de Pago', pedido['Medio de pago']);
     p('Nombre Quien Recibe', pedido['Cliente']);
     p('Celular', pedido['Celular']);
