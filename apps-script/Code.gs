@@ -273,7 +273,7 @@ function escribirHoja1_(pedido, orderId) {
       var celdaLead = hoja1.getRange(fila, idx['Lead'] + 1);
       if (leadId) {
         var urlLead = 'https://magiapastelerta4.kommo.com/leads/detail/' + leadId;
-        celdaLead.setFormula('=HIPERVINCULO("' + urlLead + '" ; "' + etiqueta.replace(/"/g, '""') + '")');
+        celdaLead.setFormula('=HYPERLINK("' + urlLead + '","' + etiqueta.replace(/"/g, '""') + '")');
       } else {
         celdaLead.setValue(orderId);
       }
