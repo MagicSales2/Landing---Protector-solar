@@ -248,6 +248,26 @@ export async function deleteOrderFromSupabase(orderId: string): Promise<boolean>
   return true;
 }
 
+// Reintenta solo las acciones que faltaron (subir a Kommo y/o crear la guía).
+// Devuelve { ok, kommo?, guia? } con cada resultado posible.
+export async function reintentarSync(
+  orderId: string,
+  accion: 'kommo' | 'guia' | 'todo',
+): Promise<{ ok: boolean; error?: string; kommo?: { estado?: string; detalle?: string }; guia?: { estado?: string; detalle?: string } }> {
+  if (!supabase) return { ok: false, error: 'Sin conexión con la base de datos.' };
+  const { data, error } = await supabase.functions.invoke('reintentar-sync', { body: { orderId, accion } });
+  if (error || !data?.ok) {
+    let mensaje = 'No se pudo reintentar.';
+    try {
+      const detalle = (error as any)?.context ? await (error as any).context.json() : data;
+      if (detalle?.error) mensaje = detalle.error;
+    } catch { /* sin más detalle */ }
+    console.error('Error en reintentar-sync:', mensaje);
+    return { ok: false, error: mensaje };
+  }
+  return data;
+}
+
 // ─── Helpers ──────────────────────────────────────────
 
 function mapRowToOrder(row: any): Order {

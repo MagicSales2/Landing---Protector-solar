@@ -12,7 +12,8 @@ import {
   getSession,
   restoreSession,
   isSupabaseConfigured,
-  confirmarPedidoManual
+  confirmarPedidoManual,
+  reintentarSync
 } from '../lib/supabaseClient';
 
 interface OrderDashboardProps {
@@ -97,6 +98,7 @@ export default function OrderDashboard({ ordersUpdatedToggle, onOrderDelete, isO
   };
 
   const [confirmando, setConfirmando] = useState<string | null>(null);
+  const [reintentando, setReintentando] = useState<string | null>(null);
 
   const [aviso, setAviso] = useState<{ texto: string; tipo: 'ok' | 'info' } | null>(null);
 
@@ -123,6 +125,31 @@ export default function OrderDashboard({ ordersUpdatedToggle, onOrderDelete, isO
       setConfirmando(null);
       await loadOrders();
       onOrderDelete();
+    }
+  };
+
+  // Reintenta una acción que falló (subir a Kommo o crear la guía). Vuelve a
+  // intentar solo lo que falta y muestra qué pasó con cada parte.
+  const handleReintentar = async (id: string, accion: 'kommo' | 'guia') => {
+    setReintentando(`${id}:${accion}`);
+    try {
+      const res = await reintentarSync(id, accion);
+      if (!res.ok) {
+        alert(res.error || 'No se pudo reintentar.');
+      } else {
+        const resumen = [
+          res.kommo ? `Kommo: ${res.kommo.detalle}` : '',
+          res.guia ? `Guía: ${res.guia.detalle}` : '',
+        ]
+          .filter(Boolean)
+          .join('\n');
+        mostrarAviso(`Pedido ${id} · ${resumen.replace(/\n/g, ' — ')}`, resumen.includes('error') ? 'info' : 'ok');
+      }
+    } catch {
+      alert('No se pudo conectar para reintentar.');
+    } finally {
+      setReintentando(null);
+      await loadOrders();
     }
   };
 
@@ -453,6 +480,26 @@ export default function OrderDashboard({ ordersUpdatedToggle, onOrderDelete, isO
                               title="Marcar como pagado y enviar a Kommo"
                             >
                               {confirmando === o.id ? 'Confirmando...' : 'Confirmar pago'}
+                            </button>
+                          )}
+                          {!o.synced && (
+                            <button
+                              onClick={() => handleReintentar(o.id, 'kommo')}
+                              disabled={reintentando === `${o.id}:kommo`}
+                              className="p-1 px-2 text-amber-700 bg-amber-50 rounded-md hover:bg-amber-100 transition-colors cursor-pointer inline-flex items-center font-bold mr-2 disabled:opacity-50"
+                              title="La venta no llegó a Kommo. Vuelve a intentar subirla."
+                            >
+                              {reintentando === `${o.id}:kommo` ? 'Subiendo...' : '↻ Subir a Kommo'}
+                            </button>
+                          )}
+                          {(!o.guiaLink || o.guiaEstado === 'error') && o.guiaEstado !== 'cancelada' && (
+                            <button
+                              onClick={() => handleReintentar(o.id, 'guia')}
+                              disabled={reintentando === `${o.id}:guia`}
+                              className="p-1 px-2 text-sky-700 bg-sky-50 rounded-md hover:bg-sky-100 transition-colors cursor-pointer inline-flex items-center font-bold mr-2 disabled:opacity-50"
+                              title="La guía no se pudo crear (por ejemplo, faltaba saldo en Envia.com). Vuelve a intentarlo."
+                            >
+                              {reintentando === `${o.id}:guia` ? 'Creando...' : '↻ Crear guía'}
                             </button>
                           )}
                           <button
