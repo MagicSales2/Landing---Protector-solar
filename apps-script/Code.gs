@@ -30,6 +30,7 @@ var CONFIG = {
   webhook: 'https://drzbxmajsbkdkydsbjzj.supabase.co/functions/v1/webhook-sheets',
   token: 'be1f6036b9724acb9497a5110f4b1d6f',
   hoja: 'Pedidos',
+  hoja1: 'Hoja 1',
 };
 
 // Columnas que el sistema conoce y mantiene sincronizadas.
@@ -38,6 +39,14 @@ var CABECERAS = [
   'Departamento', 'Ciudad', 'Direccion', 'Direccion 2', 'Notas', 'Oferta',
   'Cantidad', 'Total', 'Medio de pago', 'Estado', 'Lead Kommo',
   'Guia num', 'Guia link', 'Guia carrier', 'Guia estado', 'Guia error',
+];
+
+// Columnas de tu pestaña manual ("Hoja 1"). El sistema también escribe aquí,
+// con solo estos datos y el estado en su palabra correcta (nuevo / error / …).
+var CABECERAS1 = [
+  'Lead', 'Producto', 'ID', 'Dirección Entrega', 'Dirección 2',
+  'Medio de Pago', 'Nombre Quien Recibe', 'Celular', 'Guia',
+  'Transportadora', 'Costo domi', 'Estado',
 ];
 
 // Columna(es) que, si el dueño las edita a mano, se propagan a la base y a Kommo.
@@ -105,10 +114,10 @@ function instalarDisparador() {
 }
 
 // ── Dirección: HOJA (edición manual) → SISTEMA ──────────────────────────────
-// Detecta el cambio en una celda de CUALQUIER pestaña que tenga una columna
-// "editable" (Estado, Celular...) y avisa al sistema. El pedido se identifica
-// por la columna "ID" de esa misma pestaña (ya sea "PED-XXXX-XXXX" o un
-// nombre de lead en Kommo que lo contenga).
+// Detecta el cambio en una celda de CUALQUIER pestaña con una columna
+// "editable". El pedido se localiza buscando su "PED-XXXX-XXXX" en la fila
+// (columna "Lead" o "ID"). Si la fila no corresponde a un pedido real del
+// sistema, se ignora en silencio (no molesta con alertas en filas viejas).
 function onEdit(e) {
   try {
     var range = e.range;
@@ -118,19 +127,19 @@ function onEdit(e) {
     var colNombre = String(hoja.getRange(1, range.getColumn()).getValue()).trim();
     if (EDITABLES.indexOf(colNombre) === -1) return;
 
-    var headers = hoja.getRange(1, 1, 1, Math.max(hoja.getLastColumn(), 1)).getValues()[0];
-    var colId = headers.indexOf('ID');
-    if (colId === -1) return;
-    var celdaId = String(hoja.getRange(range.getRow(), colId + 1).getValue()).trim();
-    var extraido = celdaId.match(/PED-[A-Z0-9]{4}-[A-Z0-9]{4}/);
-    var orderId = extraido ? extraido[0] : celdaId;
+    var filaDatos = hoja.getRange(range.getRow(), 1, 1, Math.max(hoja.getLastColumn(), 1)).getValues()[0];
+    var orderId = '';
+    for (var i = 0; i < filaDatos.length; i++) {
+      var coincide = String(filaDatos[i]).match(/PED-[A-Z0-9]{4}-[A-Z0-9]{4}/);
+      if (coincide) { orderId = coincide[0]; break; }
+    }
     if (!orderId) return;
 
     var valor = String(range.getValue()).trim();
     var cambios = [{ columna: colNombre, valor: valor }];
 
     var respuesta = enviarCambio_(orderId, cambios);
-    if (respuesta && respuesta.cambiado === false) return;
+    if (!respuesta || respuesta.cambiado === false) return;
     hoja.getRange(range.getRow(), range.getColumn()).setNote(valor ? 'Sincronizado con el sistema ✅' : 'Sincronizado (vacío) ✅');
   } catch (err) {
     try {
@@ -147,6 +156,7 @@ function enviarCambio_(orderId, cambios) {
     muteHttpExceptions: true,
   };
   var resp = UrlFetchApp.fetch(CONFIG.webhook, options);
+  if (resp.getResponseCode() === 404) return null; // fila vieja sin pedido en el sistema
   if (resp.getResponseCode() !== 200) {
     throw new Error('El sistema respondió ' + resp.getResponseCode() + ': ' + resp.getContentText().slice(0, 200));
   }
@@ -200,10 +210,99 @@ function doPost(e) {
       }
       hoja.getRange(fila, columna).setValue(valor == null ? '' : valor);
     }
-    return respuesta_(200, { ok: true, fila: fila });
+
+    escribirHoja1_(pedido, orderId);
+    return respuesta_(200, { ok: true, fila: fila, hoja1: true });
   } catch (err) {
     return respuesta_(500, { ok: false, error: String(err) });
   }
+}
+
+// ── TambiÉN escribe en tu pestaña manual "Hoja 1" (gid 0) ────────────────────
+// Usa las columnas que tú tienes ("Lead", "Dirección Entrega", "Estado"…).
+// Identifica la fila buscando el PED-XXXX-XXXX en "Lead" o "ID" (así respeta
+// las filas que ya tenías escritas a mano).
+function obtenerHoja1_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var hojas = ss.getSheets();
+  for (var i = 0; i < hojas.length; i++) {
+    if (hojas[i].getSheetId() === 0) return hojas[i];
+  }
+  var porNombre = ss.getSheetByName(CONFIG.hoja1) || ss.getSheetByName('Sheet1');
+  if (porNombre) return porNombre;
+  return ss.insertSheet(CONFIG.hoja1);
+}
+
+function asegurarCabeceras1_(hoja) {
+  var ultima = Math.max(hoja.getLastColumn(), 1);
+  var fila1 = hoja.getLastRow() > 0 ? hoja.getRange(1, 1, 1, ultima).getValues()[0] : [];
+  var vacia = true;
+  for (var i = 0; i < fila1.length; i++) { if (String(fila1[i]).trim()) { vacia = false; break; } }
+  if (vacia) hoja.getRange(1, 1, 1, CABECERAS1.length).setValues([CABECERAS1]);
+}
+
+// "Estado" como corresponde en tu hoja 1: 'nuevo' cuando llega, y 'error'
+// cuando hay algún fallo (p. ej. la guía de Envia sin saldo).
+function estadoHoja1_(pedido) {
+  var base = String(pedido['Estado'] || '');
+  var error = String(pedido['Guia error'] || '');
+  if (error && base === 'nuevo') return 'error';
+  return base;
+}
+
+function escribirHoja1_(pedido, orderId) {
+  try {
+    var hoja1 = obtenerHoja1_();
+    asegurarCabeceras1_(hoja1);
+    var fila1 = hoja1.getRange(1, 1, 1, Math.max(hoja1.getLastColumn(), 1)).getValues()[0];
+    var idx = {};
+    for (var c = 0; c < fila1.length; c++) idx[String(fila1[c]).trim()] = c;
+
+    var fila = buscarFilaHoja1_(hoja1, orderId);
+    var p = function (cabecera, valor) {
+      if (idx[cabecera] !== undefined && valor != null) hoja1.getRange(fila, idx[cabecera] + 1).setValue(valor);
+    };
+
+    p('Lead', orderId);
+    p('Producto', pedido['Oferta']);
+    p('Dirección Entrega', pedido['Direccion']);
+    p('Dirección 2', pedido['Direccion 2']);
+    p('Medio de Pago', pedido['Medio de pago']);
+    p('Nombre Quien Recibe', pedido['Cliente']);
+    p('Celular', pedido['Celular']);
+    p('Guia', pedido['Guia num']);
+    p('Transportadora', pedido['Guia carrier']);
+    p('Costo domi', pedido['Total']);
+
+    var leadId = String(pedido['Lead Kommo'] || '').trim();
+    if (idx['ID'] !== undefined) {
+      if (leadId) {
+        hoja1.getRange(fila, idx['ID'] + 1).setFormula('=HYPERLINK("https://magiapastelerta4.kommo.com/leads/list2/' + leadId + '","' + leadId + '")');
+      } else if (String(hoja1.getRange(fila, idx['ID'] + 1).getValue()).trim() === '') {
+        hoja1.getRange(fila, idx['ID'] + 1).setValue('');
+      }
+    }
+
+    if (idx['Estado'] !== undefined) hoja1.getRange(fila, idx['Estado'] + 1).setValue(estadoHoja1_(pedido));
+  } catch (err) { }
+}
+
+function buscarFilaHoja1_(hoja, orderId) {
+  var fila1 = hoja.getRange(1, 1, 1, Math.max(hoja.getLastColumn(), 1)).getValues()[0];
+  var colLead = fila1.indexOf('Lead');
+  var colId = fila1.indexOf('ID');
+  var ultima = Math.max(hoja.getLastRow(), 2);
+  var columnas = [];
+  if (colLead !== -1) columnas.push(colLead + 1);
+  if (colId !== -1) columnas.push(colId + 1);
+  for (var k = 0; k < columnas.length; k++) {
+    var datos = hoja.getRange(2, columnas[k], Math.max(ultima - 1, 1), 1).getValues();
+    for (var i = 0; i < datos.length; i++) {
+      if (String(datos[i][0]).toUpperCase().indexOf(orderId.toUpperCase()) !== -1) return i + 2;
+    }
+  }
+  if (colLead !== -1) hoja.getRange(ultima + 1, colLead + 1).setValue(orderId);
+  return ultima + 1;
 }
 
 function buscarFilaPorId_(hoja, idx, orderId) {
