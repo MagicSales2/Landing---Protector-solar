@@ -11,7 +11,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { enviarAKommo, ResumenPedido } from '../_shared/kommo.ts'
-import { enviarTelegram } from '../_shared/telegram.ts'
+import { enviarTelegram, esc } from '../_shared/telegram.ts'
 import { generarGuiaPedido } from '../_shared/envia.ts'
 import { avisoSheets } from '../_shared/sheets.ts'
 
@@ -196,8 +196,8 @@ Deno.serve(async (req) => {
     [
       '🔄 <b>Reintento manual</b>',
       `🧾 <code>${orderId}</code> · N.º ${fila.numero ?? orderId}`,
-      resKommo ? `🏢 Kommo: ${resKommo.detalle}` : '',
-      resGuia ? `📦 Guía: ${resGuia.detalle}` : '',
+      resKommo ? `🏢 Kommo: ${esc(resKommo.detalle)}` : '',
+      resGuia ? `📦 Guía: ${esc(resGuia.detalle)}` : '',
     ]
       .filter(Boolean)
       .join('\n'),

@@ -17,9 +17,10 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { enviarAKommo, ResumenPedido } from '../_shared/kommo.ts'
-import { enviarTelegram, etiquetaVentaKommo } from '../_shared/telegram.ts'
+import { enviarTelegram, etiquetaVentaKommo, esc } from '../_shared/telegram.ts'
 import { generarGuiaPedido } from '../_shared/envia.ts'
 import { avisoSheets } from '../_shared/sheets.ts'
+import { firmaPedido } from '../_shared/firma.ts'
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -73,6 +74,9 @@ const formatearCOP = (n: number) => '$ ' + n.toFixed(0).replace(/\B(?=(\d{3})+(?
 // (viene en el id del link). El cliente paga en el checkout de Wompi
 // (tarjeta, PSE, Nequi, Bancolombia, QR...) y Wompi avisa por webhook.
 async function crearLinkWompi(llavePrivada: string, pedido: { id: string; total: number; producto: string; cantidad: number }) {
+  // La página de gracias recibe la firma del pedido: sin ella, quien solo
+  // conozca el id no puede ver el nombre del cliente (ver _shared/firma.ts).
+  const sec = await firmaPedido(pedido.id)
   const res = await fetch('https://api.wompi.co/v1/payment_links', {
     method: 'POST',
     headers: { Authorization: `Bearer ${llavePrivada}`, 'Content-Type': 'application/json' },
@@ -86,7 +90,7 @@ async function crearLinkWompi(llavePrivada: string, pedido: { id: string; total:
       amount_in_cents: Math.round(pedido.total * 100),
       currency: 'COP',
       expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      redirect_url: `${SITIO}/#/gracias?pedido=${pedido.id}`,
+      redirect_url: `${SITIO}/#/gracias?pedido=${pedido.id}${sec ? `&sec=${sec}` : ''}`,
       collect_shipping: false,
     }),
   })
@@ -381,11 +385,11 @@ Deno.serve(async (req) => {
     [
       '🛒 <b>Pedido nuevo · Contra Entrega</b>',
       `🧾 <code>${id}</code> · N.º ${guardado.numero ?? id}`,
-      `👤 ${nombre}`,
-      `📱 ${celular}`,
-      `📍 ${ciudad}${departamento ? ', ' + departamento : ''}`,
-      `🏠 ${direccion}${direccion2 ? ' · ' + direccion2 : ''}`,
-      `🧴 Protector Solar Anthelios SPF 50+ · ${oferta.nombre} — ${formatearCOP(pedido.total_price)}`,
+      `👤 ${esc(nombre)}`,
+      `📱 ${esc(celular)}`,
+      `📍 ${esc(ciudad)}${departamento ? ', ' + esc(departamento) : ''}`,
+      `🏠 ${esc(direccion)}${direccion2 ? ' · ' + esc(direccion2) : ''}`,
+      `🧴 Protector Solar Anthelios SPF 50+ · ${esc(oferta.nombre)} — ${formatearCOP(pedido.total_price)}`,
       kommoResumen,
       guiaResumen,
     ].join('\n'),

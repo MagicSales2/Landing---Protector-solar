@@ -11,7 +11,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { moverLeadAEstado } from '../_shared/kommo.ts'
-import { enviarTelegram, enlaceVentaKommo } from '../_shared/telegram.ts'
+import { enviarTelegram, enlaceVentaKommo, esc } from '../_shared/telegram.ts'
 import { cancelarGuia } from '../_shared/envia.ts'
 import { avisoSheets } from '../_shared/sheets.ts'
 
@@ -142,9 +142,9 @@ Deno.serve(async (req) => {
         [
           '📦 <b>Pedido DESPACHADO</b>',
           `🧾 <code>${orderId}</code> · N.º ${fila.numero ?? orderId}`,
-          `👤 ${fila.client_name}`,
-          `📱 ${fila.client_phone}`,
-          `📍 ${fila.city ?? ''}`,
+          `👤 ${esc(fila.client_name)}`,
+          `📱 ${esc(fila.client_phone)}`,
+          `📍 ${esc(fila.city ?? '')}`,
           kommoMensaje,
         ].join('\n'),
       )

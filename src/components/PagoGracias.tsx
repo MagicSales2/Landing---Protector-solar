@@ -19,6 +19,9 @@ export default function PagoGracias() {
     const params = new URLSearchParams(q);
     const id = params.get('pedido')?.trim() || '';
     pedidoId.current = id || null;
+    // Wompi devuelve esta página con la firma del pedido; permite que el
+    // servidor confirme que quien mira es quien pagó (y muestre su nombre).
+    const sec = params.get('sec')?.trim() || '';
 
     // Sin pedido en el link: no hay nada que consultar.
     if (!id) {
@@ -32,7 +35,7 @@ export default function PagoGracias() {
       intentos += 1;
       // A partir del segundo intento se le pide al servidor que confirme el
       // pago preguntándole a Wompi (por si el webhook no llegó).
-      consultarPago(id, intentos >= 2)
+      consultarPago(id, intentos >= 2, sec)
         .then((res) => {
           setResultado(res);
           if (res.ok && res.estado === 'pagado') {

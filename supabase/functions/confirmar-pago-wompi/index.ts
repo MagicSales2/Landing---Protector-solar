@@ -19,6 +19,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { confirmarVenta, json } from '../_shared/confirmarVenta.ts'
+import { firmaValida } from '../_shared/firma.ts'
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -111,6 +112,9 @@ Deno.serve(async (req) => {
     const params = new URL(req.url).searchParams
     const pedidoId = params.get('pedido')?.trim() || ''
     const verificar = params.get('verificar') === '1'
+    // El nombre del cliente solo se devuelve si quien pregunta trae la firma
+    // que se guardó en el link de pago. Con el id suelto no se expone.
+    const conFirma = await firmaValida(pedidoId, params.get('sec')?.trim() || '')
     if (!pedidoId) return json({ ok: false, error: 'Falta el pedido' }, 400)
     const { data: fila } = await sb
       .from('pedidos')
@@ -153,7 +157,9 @@ Deno.serve(async (req) => {
       orderId: f.id,
       estado: f.status,
       total: Number(f.total_price),
-      cliente: f.client_name,
+      // Sin la firma no se devuelve el nombre (ni el teléfono, que nunca se
+      // sale de aquí). La página de gracias degrada a un "gracias" genérico.
+      cliente: conFirma ? f.client_name : '',
     })
   }
 

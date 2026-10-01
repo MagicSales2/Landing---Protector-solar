@@ -5,6 +5,17 @@
 //  Nunca rompe el flujo: si Telegram falla, se registra y el pedido sigue.
 // ============================================================================
 
+// Los mensajes van con parse_mode HTML. Los datos del cliente (nombre,
+// dirección, notas) los escribe cualquiera desde el formulario público, así que
+// hay que escaparlos: un "<" suelto hace que Telegram rechace el mensaje entero
+// y el dueño se queda sin el aviso del pedido.
+export function esc(valor: unknown): string {
+  return String(valor ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
 // Link directo para abrir una venta en Kommo (acceso rápido desde el chat).
 export function enlaceVentaKommo(leadId: number | string): string {
   const subdominio = Deno.env.get('KOMMO_SUBDOMINIO') || 'magiapastelerta4'

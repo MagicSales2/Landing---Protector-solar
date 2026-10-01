@@ -19,7 +19,7 @@
 
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { enviarAKommo, marcarMetodoPago, moverLeadAEstado, ResumenPedido } from './kommo.ts'
-import { enviarTelegram, enlaceVentaKommo, etiquetaVentaKommo } from './telegram.ts'
+import { enviarTelegram, enlaceVentaKommo, etiquetaVentaKommo, esc } from './telegram.ts'
 import { generarGuiaPedido } from './envia.ts'
 import { avisoSheets } from './sheets.ts'
 
@@ -40,10 +40,10 @@ async function avisarPagoConfirmado(fila: any, kommoResumen: string, guiaResumen
   const lineas = [
     '💚 <b>¡PAGO CONFIRMADO!</b>',
     `🧾 <code>${fila.id}</code> · N.º ${fila.numero ?? fila.id}`,
-    `👤 ${fila.client_name}`,
-    `📱 ${fila.client_phone}`,
-    `📍 ${fila.city}${fila.department ? ', ' + fila.department : ''}`,
-    `🧴 Protector Solar Anthelios SPF 50+ · ${fila.offer_name ?? ''} — ${formatearCOP(Number(fila.total_price))}`,
+    `👤 ${esc(fila.client_name)}`,
+    `📱 ${esc(fila.client_phone)}`,
+    `📍 ${esc(fila.city)}${fila.department ? ', ' + esc(fila.department) : ''}`,
+    `🧴 Protector Solar Anthelios SPF 50+ · ${esc(fila.offer_name ?? '')} — ${formatearCOP(Number(fila.total_price))}`,
     kommoResumen,
   ]
   if (guiaResumen) lineas.push(guiaResumen)

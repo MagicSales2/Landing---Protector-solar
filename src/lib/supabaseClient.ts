@@ -137,12 +137,17 @@ export type ResultadoConfirmacion = {
   cliente?: string;
 };
 
-export async function consultarPago(orderId: string, verificar = false): Promise<ResultadoConfirmacion> {
+export async function consultarPago(orderId: string, verificar = false, sec = ''): Promise<ResultadoConfirmacion> {
   if (!supabase) return { ok: false, error: 'Sin conexión' };
   try {
     // verificar=1 hace que el servidor pregunte a Wompi y confirme el pago si
     // allí ya está APPROVED (por si el webhook no llegó a tiempo).
-    const url = `${supabaseUrl}/functions/v1/confirmar-pago-wompi?pedido=${encodeURIComponent(orderId)}${verificar ? '&verificar=1' : ''}`;
+    // sec es la firma del pedido que Wompi devuelve en la URL de la página de
+    // gracias: sin ella el servidor no revela el nombre del cliente.
+    const params = new URLSearchParams({ pedido: orderId });
+    if (verificar) params.set('verificar', '1');
+    if (sec) params.set('sec', sec);
+    const url = `${supabaseUrl}/functions/v1/confirmar-pago-wompi?${params.toString()}`;
     const res = await fetch(url, {
       method: 'GET',
       headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${supabaseAnonKey}` },
