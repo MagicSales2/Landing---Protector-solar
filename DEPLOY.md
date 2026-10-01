@@ -95,26 +95,51 @@ subida de archivos por FTP.
 ```
 Internet ──https──> Traefik (:443, TLS de Let's Encrypt)
                          │
-                         │ http hacia 72.61.5.135:3001
+                         │ red compartida "traefik-proxy"
                          ▼
                  contenedor anthelios_landing_web (nginx en :80)
                          │
                          └── http://72.61.5.135:3001  (prueba directa)
 ```
 
+Traefik y el contenedor se hablan por la red compartida `traefik-proxy`, que
+crea el stack de Traefik en la máquina. El `docker-compose.yml` de este
+repositorio se conecta a ella con `external: true`: no la crea ni la borra.
+
 Las etiquetas `traefik.*` de `docker-compose.yml` son las que arman este
 camino. Traefik las lee solo: no hay que escribirle nada a mano.
+
+## Poner esta landing en otro subdominio
+
+Copiar el bloque de `labels` y cambiar **solo** tres cosas:
+
+| Qué | Ahora | Cambiar a |
+|---|---|---|
+| Nombre del router | `protectorsolar` | `elnuevosubdominio` |
+| Nombre del servicio | `protectorsolar` | `elnuevosubdominio` |
+| Regla `Host(...)` | `protectorsolar.skinoferta.cloud` | `elnuevosubdominio.skinoferta.cloud` |
+
+El nombre del router tiene que ser único en toda la máquina: si dos landings
+usan el mismo, Traefik se confunde y deja de publicar uno de los dos.
+
+Y en el panel de DNS, el registro A del subdominio nuevo tiene que apuntar a
+la IP del servidor.
 
 ## Antes de tocar nada: mirar cómo está
 
 Tres datos hay que confirmar **en el servidor**, porque no se pueden adivinar:
 
 ```bash
-# 1. Cómo se llama el contenedor de Traefik y qué redes tiene
-docker ps --format '{{.Names}}  {{.Image}}  {{.Ports}}' | grep -i traefik
+# 1. Que la red compartida con Traefik existe y cómo se llama
+docker network ls | grep -i traefik
+#    -> tiene que existir una llamada "traefik-proxy". Ese nombre es el que va
+#       en "traefik.docker.network" y en el bloque "networks:" del compose.
+#       Si no existe, el build falla con "network traefik-proxy not found":
+#       es que el stack de Traefik no está levantado.
 
 # 2. Cómo se llama el "certificates resolver" (tiene que ser "letsencrypt")
-docker exec <contenedor-traefik> cat /etc/traefik/traefik.yml 2>/dev/null \
+docker ps --format '{{.Names}}' | grep -i traefik
+docker exec <contenidor-traefik> cat /etc/traefik/traefik.yml 2>/dev/null \
   || docker exec <contenedor-traefik> cat /etc/traefik/traefik.toml 2>/dev/null
 #    -> buscar:  certificatesResolvers:
 #                    letsencrypt:            <-- este nombre es el que va en la etiqueta
@@ -126,8 +151,12 @@ docker inspect anthelios_landing_web --format '{{.Image}}' > /tmp/imagen-anterio
 ```
 
 Si el nombre del resolver no es `letsencrypt`, hay que corregir
-`traefik.http.routers.protector-solar.tls.certresolver` en
+`traefik.http.routers.protectorsolar.tls.certresolver` en
 `docker-compose.yml` **antes** de continuar.
+
+Ojo con el punto 3: las etiquetas de Traefik son parte del contenedor, así que
+cambiar el compose no altera el contenedor que ya está corriendo. Recién en el
+paso de abajo, cuando se recrea, es cuando entran en vigencia.
 
 ## Publicar sin dejar el sitio caído
 
@@ -147,10 +176,11 @@ git log --oneline -1          # tiene que ser c43dea2
 docker compose build --no-cache
 
 # 3. Probarla en un puerto momentáneo, SIN tocar el que está sirviendo
-docker run -d --rm --name prueba-landing -p 3002:80 landing-nuevo-web
+docker images --format '{{.Repository}}:{{.Tag}}' | grep -E 'web$'   # nombre de la imagen
+docker run -d --rm --name prueba-landing -p 3002:80 <NOMBRE-DE-LA-IMAGEN-ARRIBA>
 sleep 3
 curl -s http://127.0.0.1:3002/ | grep -o 'index-[A-Za-z0-9_-]*\.js'
-curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3002/assets/
+curl -s -o /dev/null -w 'puerto de prueba: %{http_code}\n' http://127.0.0.1:3002/
 docker rm -f prueba-landing
 
 # Si el paso 3 no devuelve el HTML con el script, PARAR acá. No seguir.
