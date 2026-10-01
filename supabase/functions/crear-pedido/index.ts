@@ -21,6 +21,7 @@ import { enviarTelegram, etiquetaVentaKommo, esc } from '../_shared/telegram.ts'
 import { generarGuiaPedido } from '../_shared/envia.ts'
 import { avisoSheets } from '../_shared/sheets.ts'
 import { firmaPedido } from '../_shared/firma.ts'
+import { enviarEventoTiktok } from '../_shared/tiktok.ts'
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -48,6 +49,7 @@ type PedidoEntrada = {
   utm?: Record<string, string | undefined>
   userAgent?: string
   referrer?: string
+  pageUrl?: string
 }
 
 function texto(valor: unknown, max: number): string {
@@ -345,6 +347,43 @@ Deno.serve(async (req) => {
     await sb.from('pedidos').update({ kommo_estado: 'error', kommo_error: detalle.slice(0, 500) }).eq('id', id)
     await sb.from('sync_log').insert({ pedido_id: id, destino: 'kommo', estado: 'error', detalle: detalle.slice(0, 500) })
     kommoResumen = `⚠️ Kommo: ${detalle.slice(0, 160)}`
+  }
+
+  // --- 6b) Evento de compra para TikTok (Events API).
+  // En Contra Entrega el dinero se cobra al recibir, así que el pedido ya
+  // cuenta como venta en el momento en que se crea. Sin esto, TikTok solo
+  // registraba las compras con Wompi (que pasan por confirmarVenta) y las
+  // ventas más frecuentes no contaban como conversiones.
+  // El event_id es el id del pedido: es el mismo que manda el navegador en su
+  // CompletePayment, así que TikTok cuenta la venta una sola vez.
+  try {
+    await enviarEventoTiktok(
+      {
+        event: 'CompletePayment',
+        event_id: id,
+        order_id: id,
+        content_name: oferta.nombre,
+        content_type: 'product',
+        quantity: oferta.cantidad,
+        value: oferta.precio,
+        currency: 'COP',
+        client_email: correo,
+        client_phone: celular,
+        document_id: documento,
+        content_ids: [oferta.id],
+        page_url: texto(entrada.pageUrl, 500) || undefined,
+        referrer: texto(entrada.referrer, 300) || undefined,
+        user_agent: texto(entrada.userAgent, 300) || undefined,
+      },
+      async (estado, detalle) => {
+        await sb
+          .from('sync_log')
+          .insert({ pedido_id: id, destino: 'tiktok', estado, detalle: detalle.slice(0, 500) })
+      },
+    )
+  } catch (err) {
+    const detalle = err instanceof Error ? err.message : String(err)
+    console.error('Fallo al enviar evento a TikTok:', detalle)
   }
 
   // --- 7) Guía de envío. En Contra Entrega se genera al llegar el pedido

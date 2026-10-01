@@ -151,6 +151,22 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
       content_type: 'product'
     });
 
+    // Con Contra Entrega el pago ocurre cuando el cliente recibe el paquete,
+    // así que desde ya la venta está comprometida y se cuenta como
+    // conversión. Con Wompi no: el pago aún no está confirmado y el evento lo
+    // manda confirmar-pago-wompi cuando Wompi avisa del pago (se ve en la
+    // página de gracias).
+    if (newOrder.paymentMethod === 'Contra Entrega') {
+      trackPixelEvent('Purchase', {
+        event_id: newOrder.id,
+        value: newOrder.totalPrice,
+        currency: 'COP',
+        content_name: newOrder.offerName,
+        content_type: 'product',
+        num_items: newOrder.quantity
+      });
+    }
+
     // Con Wompi, se abre el link único de este pedido. Si el servidor no
     // alcanzó a crearlo, el pedido queda guardado y se le avisa al cliente.
     if (newOrder.paymentMethod === 'Wompi') {
