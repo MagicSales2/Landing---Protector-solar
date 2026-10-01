@@ -244,7 +244,7 @@ export default function App() {
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 bg-orange-600 rounded-full animate-ping" />
             <span className="text-sm md:text-base font-black text-slate-900 tracking-tight font-sans">
-              DERMAGIA <span className="text-orange-600">COLOMBIA</span>
+              SKIN OFERTAS <span className="text-orange-600">COLOMBIA</span>
             </span>
           </div>
           <div className="flex items-center gap-1.5 bg-slate-100 text-slate-700 text-[10px] md:text-xs font-black px-3 py-1.5 rounded-full border border-slate-200">
@@ -745,7 +745,7 @@ export default function App() {
             <button onClick={abrirFormulario} className="hover:text-slate-300 transition-colors font-semibold cursor-pointer">Pedir Ahora</button>
           </div>
           <p className="text-[10px] text-slate-600 pt-3">
-            © 2026 Dermagia Colombia. Todos los derechos reservados.
+            © 2026 Skin Ofertas Colombia. Todos los derechos reservados.
           </p>
         </div>
       </footer>

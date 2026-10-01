@@ -339,7 +339,7 @@ export default function AdvisorBot() {
             {/* Warning disclosure about virtual answers */}
             <div className="bg-slate-50 px-4 py-1.5 border-t border-slate-100 flex items-center gap-1.5 text-[9px] text-slate-400 font-semibold uppercase tracking-wider">
               <AlertCircle className="w-3.5 h-3.5 text-slate-400" />
-              <span>Soporte automatizado oficial Dermagia</span>
+              <span>Soporte automatizado oficial Skin Ofertas</span>
             </div>
 
             {/* Input Form */}
