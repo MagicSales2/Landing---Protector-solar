@@ -12,13 +12,16 @@ export default defineConfig(() => {
     base: process.env.GITHUB_PAGES ? '/Landing---Protector-solar/' : '/',
     plugins: [react(), tailwindcss()],
     build: {
-      // Nombres sin hash en la carpeta: permite cachear los assets para
-      // siempre y dejar solo index.html como "no cachear".
+      // Los nombres llevan hash (comportamiento por defecto de Vite):
+      // assets/index-a1b2c3.js. Si el contenido cambia, el nombre cambia, y por
+      // eso el .htaccess puede cachear esos archivos para un año con
+      // "immutable" sin riesgo. El index.html es el único que va sin caché y
+      // siempre apunta al archivo nuevo, así que una actualización se ve al
+      // instante. IMPORTANTE: no quitar el hash sin cambiar a la vez la regla
+      // de caché, o los visitantes quedaron viendo la versión vieja del sitio.
       rollupOptions: {
         output: {
-          entryFileNames: 'assets/app.js',
-          chunkFileNames: 'assets/[name].js',
-          assetFileNames: 'assets/[name][extname]',
+          assetFileNames: 'assets/[name]-[hash][extname]',
         },
       },
     },

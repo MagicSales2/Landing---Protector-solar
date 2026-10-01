@@ -33,8 +33,9 @@
 </IfModule>
 
 <IfModule mod_headers.c>
-  # El nombre de los archivos ya no lleva hash (assets/app.js), así que se
-  # marca como inmutable para(cachear un año). El HTML se valida siempre.
+  # Los assets llevan hash en el nombre (assets/index-a1b2c3.js): si el
+  # contenido cambia, cambia el nombre, así que es seguro cachearlos un año.
+  # El index.html va sin caché y siempre apunta al archivo nuevo.
   <FilesMatch "\.(css|js|jpg|jpeg|png|webp|svg|mp4)$">
     Header set Cache-Control "public, max-age=31536000, immutable"
   </FilesMatch>
