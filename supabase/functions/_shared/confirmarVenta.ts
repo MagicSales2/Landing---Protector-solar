@@ -86,13 +86,16 @@ async function guiaParaPago(sb: SupabaseClient, kommoToken: string, fila: any) {
 
 // Conversión para TikTok por el lado del servidor (Events API). Se manda
 // cuando el pago queda confirmado, con los datos del cliente cifrados en
-// SHA-256 como exige TikTok. El event_id es el id del pedido: es el mismo que
-// manda el píxel del navegador, así que si llegan los dos TikTok cuenta una
-// sola venta. Si no hay token configurado, no hace nada.
+// El event_id es el id del pedido: es el mismo que manda el píxel del
+// navegador, así que si llegan los dos TikTok cuenta una sola venta. Ojo: el
+// nombre del evento tiene que ser IGUAL en los dos lados, porque TikTok
+// deduplica por nombre de evento + event_id. Si el píxel mandara
+// CompletePayment y acá Purchase, se contaría la venta dos veces.
+// Si no hay token configurado, no hace nada.
 async function avisarTiktok(sb: SupabaseClient, fila: any) {
   const resultado = await enviarEventoTiktok(
     {
-      event: 'CompletePayment',
+      event: 'Purchase',
       event_id: fila.id,
       order_id: fila.id,
       client_email: fila.client_email,
@@ -105,6 +108,9 @@ async function avisarTiktok(sb: SupabaseClient, fila: any) {
       quantity: Number(fila.quantity),
       user_agent: fila.user_agent,
       referrer: fila.referrer,
+      // El ttclid se guardó en utm_content porque la tabla no tiene columna
+      // propia. Si no vino, se manda undefined y TikTok lo ignora.
+      ttclid: fila.utm_content || undefined,
     },
     async (estado, detalle) => {
       await sb.from('sync_log').insert({ pedido_id: fila.id, destino: 'tiktok', estado, detalle })

@@ -53,6 +53,14 @@ type PedidoEntrada = {
   userAgent?: string
   referrer?: string
   pageUrl?: string
+  // Identificadores de TikTok. El ttclid viene en la URL cuando el visitante
+  // llega desde un anuncio, y el ttp es la cookie de TikTok. Con los dos, el
+  // servidor puede emparejar la venta con el clic que la originó.
+  ttclid?: string
+  ttp?: string
+  // La IP no se puede leer desde el navegador (la esconde el navegador), así
+  // que se toma del encabezado que pone Supabase/Cloudflare.
+  clientIp?: string
 }
 
 function texto(valor: unknown, max: number): string {
@@ -132,6 +140,15 @@ Deno.serve(async (req) => {
   // Trampa para robots: si llenaron el campo invisible, respondemos como si
   // todo estuviera bien pero no guardamos nada.
   if (entrada.website) return json({ ok: true, orderId: 'PED-DEMO' })
+
+  // La IP del visitante no se puede leer desde el navegador, así que se toma de
+  // los encabezados que pone el proxy delante de la función. TikTok la quiere en
+  // texto plano para validar que la visita sea real. Con Cloudflare delante,
+  // x-forwarded-for trae la IP real del visitante, no la del proxy.
+  if (!entrada.clientIp) {
+    const reenviada = req.headers.get('x-forwarded-for') || ''
+    entrada.clientIp = reenviada.split(',')[0].trim() || req.headers.get('cf-connecting-ip') || ''
+  }
 
   // --- 1) Validación de lo que llega del navegador
   const nombre = texto(entrada.clientName, 150)
@@ -224,6 +241,10 @@ Deno.serve(async (req) => {
       utm_term: texto(entrada.utm?.utm_term, 100) || null,
       referrer: texto(entrada.referrer, 300) || null,
       user_agent: texto(entrada.userAgent, 300) || null,
+      // El ttclid no tiene columna propia en la tabla, así que se guarda en
+      // utm_content, que está libre y ya se lee para el reporte de campañas.
+      // Así el webhook de Wompi lo puede recuperar y mandarlo a TikTok.
+      utm_content: texto(entrada.ttclid, 200) || texto(entrada.utm?.utm_content, 100) || null,
     })
     .select('id, numero, total_price, utm_source, utm_medium, utm_campaign, utm_content, utm_term, referrer')
     .single()
@@ -358,11 +379,11 @@ Deno.serve(async (req) => {
   // registraba las compras con Wompi (que pasan por confirmarVenta) y las
   // ventas más frecuentes no contaban como conversiones.
   // El event_id es el id del pedido: es el mismo que manda el navegador en su
-  // CompletePayment, así que TikTok cuenta la venta una sola vez.
+  // Purchase, así que TikTok cuenta la venta una sola vez.
   try {
     await enviarEventoTiktok(
       {
-        event: 'CompletePayment',
+        event: 'Purchase',
         event_id: id,
         order_id: id,
         content_name: oferta.nombre,
@@ -377,6 +398,9 @@ Deno.serve(async (req) => {
         page_url: texto(entrada.pageUrl, 500) || undefined,
         referrer: texto(entrada.referrer, 300) || undefined,
         user_agent: texto(entrada.userAgent, 300) || undefined,
+        client_ip: texto(entrada.clientIp, 60) || undefined,
+        ttclid: texto(entrada.ttclid, 200) || undefined,
+        ttp: texto(entrada.ttp, 200) || undefined,
       },
       async (estado, detalle) => {
         await sb

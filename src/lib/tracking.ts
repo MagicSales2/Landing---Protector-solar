@@ -175,13 +175,17 @@ export function trackPixelEvent(eventName: string, data?: { value?: number; curr
   // 2. TikTok Pixel event tracker
   try {
     if ((window as any).ttq) {
-      // TikTok llama "CompletePayment" a la compra confirmada (es el
-      // equivalente de Purchase). El event_id es lo que permite que TikTok
-      // deduplique el evento del navegador con el que manda el servidor por
-      // la Events API: si llegan los dos con el mismo event_id, cuenta una
-      // sola venta. Usamos el id del pedido, que es único.
+      // El event_id es lo que permite que TikTok deduplique el evento del
+      // navegador con el que manda el servidor por la Events API: si llegan
+      // los dos con el mismo event_id, cuenta una sola venta. Usamos el id del
+      // pedido, que es único.
+      //
+      // El nombre tiene que ser EXACTAMENTE el mismo en los dos lados, porque
+      // TikTok deduplica por (event_source_id + event + event_id). Por eso acá
+      // va "Purchase" y no el viejo "CompletePayment": si el píxel mandara
+      // CompletePayment y el servidor Purchase, se contaría dos veces.
       if (eventName === 'Purchase') {
-        (window as any).ttq.track('CompletePayment', {
+        (window as any).ttq.track('Purchase', {
           event_id: data?.event_id,
           value: data?.value || 0,
           currency: data?.currency || 'COP',
@@ -190,6 +194,7 @@ export function trackPixelEvent(eventName: string, data?: { value?: number; curr
       } else if (eventName === 'InitiateCheckout') {
         (window as any).ttq.track('InitiateCheckout', datos);
       } else if (eventName === 'Lead') {
+        // El píxel de TikTok llama "SubmitForm" a lo que en Meta es "Lead".
         (window as any).ttq.track('SubmitForm', datos);
       } else {
         (window as any).ttq.track(eventName, datos);

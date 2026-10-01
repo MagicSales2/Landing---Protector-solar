@@ -90,6 +90,12 @@ export async function createOrder(datos: NuevoPedido): Promise<PedidoCreado> {
       utm: leerUtm(),
       referrer: document.referrer || undefined,
       userAgent: navigator.userAgent,
+      // ttclid es el identificador que TikTok mete en la URL cuando alguien
+      // hace clic en un anuncio. ttp es la cookie de TikTok. Con los dos, el
+      // servidor puede emparejar la venta con el clic que la originó, que es
+      // justamente de donde sale el retorno de la campaña.
+      ttclid: leerTtclid(),
+      ttp: leerTtp(),
       // La URL de la landing tal como la vio el visitante. La usa el backend
       // como page_url de los eventos de TikTok, para que en Events Manager
       // aparezca el dominio real y no un valor por defecto.
@@ -122,6 +128,19 @@ export function leerUtm(): Record<string, string> {
     if (valor) utm[clave] = valor.slice(0, 200);
   }
   return utm;
+}
+
+// El ttclid viene en la URL (?ttclid=...) cuando el visitante llega desde un
+// anuncio de TikTok. TikTok lo exige junto con la cookie ttp para poder
+// emparejar la venta con el clic que la originó.
+export function leerTtclid(): string | undefined {
+  const valor = new URLSearchParams(window.location.search).get('ttclid');
+  return valor ? valor.slice(0, 200) : undefined;
+}
+
+export function leerTtp(): string | undefined {
+  const match = document.cookie.match(/(?:^|;\s*)ttp=([^;]+)/);
+  return match ? decodeURIComponent(match[1]).slice(0, 200) : undefined;
 }
 
 // ─── Confirmación de pagos (Wompi) ─────────────────────
