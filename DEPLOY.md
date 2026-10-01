@@ -97,7 +97,7 @@ Internet ──https──> Traefik (:443, TLS de Let's Encrypt)
                          │
                          │ red compartida "traefik-proxy"
                          ▼
-                 contenedor anthelios_landing_web (nginx en :80)
+                 contenedor landing-protector-solar1 (nginx en :80)
                          │
                          └── http://72.61.5.135:3001  (prueba directa)
 ```
@@ -115,8 +115,8 @@ confusión más común al trabajar con esto:
 | Qué | Cómo se llama | Dónde se cambia |
 |---|---|---|
 | Carpeta en el servidor | `/docker/landing-protector-solar1` | Cuando se clona el repo |
-| Contenedor | `anthelios_landing_web` | `container_name` del compose |
-| Imagen | `landing-actualizado-web` | la genera `docker compose build` |
+| Contenedor | `landing-protector-solar1` | `container_name` del compose |
+| Imagen | `landing-codigo-web` | la genera `docker compose build` |
 
 Los tres nombres son independientes. El script `/actualizarlanding` no depende
 de ninguno: detecta el contenedor por el puerto que publica y arma el nombre
@@ -158,9 +158,9 @@ docker exec <contenidor-traefik> cat /etc/traefik/traefik.yml 2>/dev/null \
 #                    letsencrypt:            <-- este nombre es el que va en la etiqueta
 
 # 3. Cómo está el contenedor de la landing ahora mismo (para poder volver atrás)
-docker ps -a --filter name=anthelios_landing_web \
+docker ps -a --filter name=landing-protector-solar1 \
   --format '{{.Names}}  {{.Status}}  {{.Image}}'
-docker inspect anthelios_landing_web --format '{{.Image}}' > /tmp/imagen-anterior-landing.txt
+docker inspect landing-protector-solar1 --format '{{.Image}}' > /tmp/imagen-anterior-landing.txt
 ```
 
 Si el nombre del resolver no es `letsencrypt`, hay que corregir
@@ -173,129 +173,149 @@ paso de abajo, cuando se recrea, es cuando entran en vigencia.
 
 ## Publicar sin dejar el sitio caído
 
-El orden importa: primero se construye y se prueba la imagen nueva en un
-puerto aparte, y solo cuando está buena se cambia el contenedor que está
-sirviendo.
+## Cómo se hace a mano
+
+Esto es lo mismo que hace `/actualizarlanding`, paso por paso. Útil para
+entender qué hace el script, o si alguna vez hay que hacerlo sin él.
 
 ```bash
-# 1. Código limpio, en una carpeta nueva (la vieja no es un repo Git)
+# 1. Código limpio en una carpeta nueva
 cd /docker
 git clone --branch home --depth 1 \
-  https://github.com/MagicSales2/Landing---Protector-solar.git landing-actualizado
-cd landing-actualizado
-git log --oneline -1          # tiene que ser c43dea2
+  https://github.com/MagicSales2/Landing---Protector-solar.git landing-codigo
+cd landing-codigo
+git log --oneline -1
 
-# 2. Construir la imagen nueva, sin caché
+# 2. El nombre del contenedor tiene que ser este
+sed -i 's/container_name:.*/container_name: landing-protector-solar1/' docker-compose.yml
+
+# 3. Construir la imagen nueva, sin caché
 docker compose build --no-cache
 
-# 3. Probarla en un puerto momentáneo, SIN tocar el que está sirviendo
-docker images --format '{{.Repository}}:{{.Tag}}' | grep -E 'web$'   # nombre de la imagen
-docker run -d --rm --name prueba-landing -p 3002:80 <NOMBRE-DE-LA-IMAGEN-ARRIBA>
-sleep 3
-curl -s http://127.0.0.1:3002/ | grep -o 'index-[A-Za-z0-9_-]*\.js'
-curl -s -o /dev/null -w 'puerto de prueba: %{http_code}\n' http://127.0.0.1:3002/
-docker rm -f prueba-landing
+# 4. Apagar lo que esté en el 3001, llámese como se llame
+docker ps -q --filter publish=3001 | xargs -r docker rm -f
 
-# Si el paso 3 no devuelve el HTML con el script, PARAR acá. No seguir.
-
-# 4. Cambiar el contenedor que está sirviendo
-docker stop anthelios_landing_web
+# 5. Levantar el contenedor nuevo
 docker compose up -d
 docker compose ps
-docker compose logs --tail=30
+```
 
-# 5. Verificar por los dos lados
+### Verificar
+
+```bash
 curl -s -o /dev/null -w 'puerto 3001: %{http_code}\n' http://127.0.0.1:3001/
-curl -s -o /dev/null -w 'dominio:     %{http_code}\n' https://protectorsolar.skinoferta.cloud/
+curl -s -o /dev/null -w 'dominio: %{http_code}\n' https://protectorsolar.skinoferta.cloud/
 ```
 
-> Las etiquetas son parte del contenedor, así que el paso 4 tiene que
-> recrearlo. `docker compose up -d` lo hace solo porque el compose cambió.
-> **Nunca** `docker compose down` después de verificar: eso apaga el sitio.
+Las dos tienen que decir **200**.
 
-## Si algo sale mal
-
-```bash
-# Volver a la imagen anterior (el ID quedó guardado en el paso 3 de la inspection)
-cat /tmp/imagen-anterior-landing.txt
-```
-
-Con ese ID:
-
-```bash
-docker rm -f anthelios_landing_web
-docker run -d --name anthelios_landing_web -p 3001:80 --restart always \
-  sha256:<ID-ANTERIOR>
-```
-
-Eso deja el sitio como estaba, pero **sin** las etiquetas de Traefik: el
-dominio no responderá hasta que se vuelva a aplicar el compose.
-
-## Registro DNS
-
-En el panel de `skinoferta.cloud`:
-
-| Tipo | Nombre | Valor |
-|---|---|---|
-| A | `protectorsolar` | `72.61.5.135` |
-
-Y el puerto **80 tiene que quedar abierto**, porque es el que usa
-Let's Encrypt para validar el certificado. El 443 también.
+El dominio puede dar 404 los primeros segundos, porque Traefik tarda un
+momento en enterarse del contenedor nuevo. Si pasa, esperá unos segundos y
+volvé a correr el `curl` del dominio. No es un error.
 
 ---
 
 # `/actualizarlanding`
 
-Hay un script que hace todo el procedimiento en un solo comando. Se baja
-directo de GitHub, así que no hay que subirlo a mano al servidor:
+Script que hace toda la actualización en un solo paso. No hay que pasarle
+ninguna ruta ni ningún nombre: ya viene todo escrito adentro.
+
+## Cómo se usa
+
+Son dos líneas. La primera baja el script, la segunda lo corre:
 
 ```bash
-curl -o actualizarlanding.sh "https://raw.githubusercontent.com/MagicSales2/Landing---Protector-solar/home/actualizarlanding.sh?x=$(date +%s)"
+cd /tmp
+```
+
+```bash
+curl -fsSL "https://api.github.com/repos/MagicSales2/Landing---Protector-solar/contents/actualizarlanding.sh?ref=home" | sed -n 's/^ *"content": *"\(.*\)",$/\1/p' | sed 's/\\n//g' | base64 -d > actualizarlanding.sh
+```
+
+```bash
 bash actualizarlanding.sh
 ```
 
-**No hay que pasarle ninguna ruta.** El script detecta solo:
+Se puede repetir cada vez que haya cambios. Al final avisa `Ctrl+Shift+R`.
 
-- Qué contenedor está publicando el puerto 3001
-- En qué carpeta está el proyecto, y si es un repositorio Git o una copia vieja
-- El nombre de la imagen, para poder volver atrás
-
-Si el nombre del contenedor del compose no coincide con el que ya está
-corriendo, lo ajusta solo antes de arrancar, para que no choquen.
-
-Si el proyecto en `/docker` es una copia vieja sin Git, no le importa: el
-script siempre descarga el código limpio de GitHub a `/docker/landing-actualizado`.
-
-Se puede volver a ejecutar cada vez que haya cambios nuevos. Hace lo mismo
-que el paso a paso de esta página, en orden y con las mismas salvaguardas:
+## Qué hace
 
 | Paso | Qué hace | Si falla |
 |---|---|---|
-| 1 | Detecta contenedor, carpeta e imagen | No toca nada |
-| 2 | Baja la rama `home` de GitHub | No toca nada |
-| 3 | Construye la imagen sin caché | No toca nada |
-| 4 | La prueba en el puerto 3002, aparte | **No toca nada** |
-| 5 | Cambia el contenedor | — |
-| 6 | Verifica 3001, el dominio y el formulario | Vuelve atrás solo |
+| 1 | Baja la rama `home` de GitHub a `/docker/landing-codigo` | No toca nada |
+| 2 | Construye la imagen sin caché | No toca nada |
+| 3 | Apaga el contenedor del puerto 3001 y levanta el nuevo | — |
+| 4 | Verifica puerto y dominio, reintentando hasta 12 veces | Vuelve atrás solo |
+| 5 | Confirma que el JavaScript del sitio trae el formulario | Solo avisa |
 
-Guarda el ID de la imagen anterior en `/tmp/imagen-anterior-landing.txt`.
-Si la verificación del paso 6 falla, el script restaura esa imagen
-automáticamente y avisa por pantalla.
+Guarda el ID de la imagen anterior en `/tmp/imagen-anterior-landing.txt`. Si la
+verificación falla, restaura esa imagen y avisa por pantalla.
 
-Después de actualizar, hay que recargar el navegador con `Ctrl+Shift+R`
-para ver el cambio: el navegador guarda la versión anterior.
+## Por qué la descarga es tan rara
 
-## Cambiar el subdominio o el contenedor
+La línea de descarga no usa `raw.githubusercontent.com` a propósito. Va por la
+API de GitHub y viene en base64. Parece enredada, pero es la única forma que
+funciona:
 
-Al principio del script están todas las variables. Si algún día hay otro
-proyecto con otro dominio, se copian y se cambian:
+`raw.githubusercontent.com` guarda copia de los archivos en servidores de
+caché. Sirven la versión anterior del script aunque el push nuevo ya esté
+hecho, y a veces durante varios minutos. Cuando eso pasó, el script que se
+baixaba era el viejo, que fallaba siempre en el mismo paso y daba a entender
+que el build estaba roto cuando el build estaba perfecto. La API no tiene ese
+problema.
+
+## Las tres cosas que antes fallaban
+
+Anotadas acá porque son las que costaron más tiempo, para no repetirlas.
+
+**1. Buscar el contenedor por nombre.** El script preguntaba a Docker cuál
+era el contenedor del puerto 3001 y le creía. Docker le devolvió
+`anthelios_landing_web`, un contenedor viejo que había quedado dando vueltas,
+cuando el bueno es `landing-protector-solar1`. El nombre está escrito en el
+script, no se adivina.
+
+**2. Confiar en Traefik al instante.** Recién levantado el contenedor, el
+dominio da 404 unos segundos porque Traefik todavía no lo vio. El script antes
+leía ese 404 como "todo roto" y paraba. Ahora reintenta: primero espera que el
+puerto 3001 responda, y recién ahí mira el dominio, hasta 12 veces.
+
+**3. Tirar la actualización por un aviso.** El script buscaba el texto
+`formulario-pedido` dentro del JavaScript y, si no lo encontraba, abortaba.
+Ese chequeo quedó como aviso. El `index.html` es una cáscara vacía con un
+`<div id="root">` y nada más: la página se dibuja después con JavaScript.
+Quedarse con el sitio viejo por un aviso es peor que avisar y seguir.
+
+## Si algo sale mal
+
+Para ver qué pasó:
 
 ```bash
-RAMA / REPO / CARPETA / IMAGEN / CONTENEDOR / PUERTO_LOCAL / DOMINIO
+cd /docker/landing-codigo && docker compose logs --tail 30
 ```
 
-> El `?x=$(date +%s)` al final no es decorativo. GitHub guarda una copia de
-> los archivos en sus servidores de caché y a veces sirve la versión anterior
-> unos minutos después de un push. Ese parámetro le pregunta siempre por la
-> versión nueva. Si el script se descarga de 8679 bytes en vez de 9725, es que
-> te sirvió la copia vieja.
+Para volver atrás a mano:
+
+```bash
+docker rm -f landing-protector-solar1
+```
+
+```bash
+docker run -d --name landing-protector-solar1 -p 3001:80 --restart always $(cat /tmp/imagen-anterior-landing.txt)
+```
+
+Eso deja el sitio andando en `http://72.61.5.135:3001`, pero el dominio puede
+quedar sin HTTPS hasta que se repita `cd /docker/landing-codigo && docker compose up -d`,
+porque el contenedor que se crea así no lleva las etiquetas de Traefik.
+
+## Cambiar el dominio o el contenedor
+
+Arriba del todo del script están las variables. Si algún día hay otro
+proyecto, se cambian y nada más:
+
+```bash
+REPO / RAMA / DOMINIO / PUERTO / CONTENEDOR / CARPETA
+```
+
+Importante: si se cambia `CONTENEDOR`, hay que cambiar también el
+`container_name:` del `docker-compose.yml`, o los dos contenedores chocan por
+el mismo puerto.

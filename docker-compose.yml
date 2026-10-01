@@ -24,7 +24,7 @@ services:
       context: .
       dockerfile: Dockerfile
 
-    container_name: anthelios_landing_web
+    container_name: landing-protector-solar1
 
     # Se mantiene el puerto 3001 publicado para poder revisar el sitio en
     # crudo, sin depender del dominio ni del certificado.
