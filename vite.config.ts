@@ -5,8 +5,23 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
+    // GitHub Pages sirve el proyecto en /Landing---Protector-solar/.
+    // Hostinger (o cualquier hosting normal) lo sirve en la raíz del dominio,
+    // y por eso basta con NO poner GITHUB_PAGES al compilar: así el mismo
+    // código sale para los dos sitios.
     base: process.env.GITHUB_PAGES ? '/Landing---Protector-solar/' : '/',
     plugins: [react(), tailwindcss()],
+    build: {
+      // Nombres sin hash en la carpeta: permite cachear los assets para
+      // siempre y dejar solo index.html como "no cachear".
+      rollupOptions: {
+        output: {
+          entryFileNames: 'assets/app.js',
+          chunkFileNames: 'assets/[name].js',
+          assetFileNames: 'assets/[name][extname]',
+        },
+      },
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, 'src'),

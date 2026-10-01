@@ -37,12 +37,13 @@ jobs:
           GITHUB_PAGES: 'true'
           # OJO: una variable de entorno VACÍA pisa el valor de .env.production.
           # Si un secreto no existe en GitHub, `${{ secrets.X }}` llega como ""
-          # y el píxel se queda sin id en el build (pasó con el de TikTok).
+          # y el pixel se queda sin id en el build (pasó con el de TikTok).
           # Por eso aquí solo se pasan los que existen de verdad; el resto llega
           # desde .env.production, que está versionado a propósito (el id del
-          # píxel es público: viaja dentro del bundle de la landing).
+          # pixel es público: viaja dentro del bundle de la landing).
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SITE_URL: 'https://magiasales2.github.io/Landing---Protector-solar/'
 
       - name: Publicar en la rama gh-pages
         uses: peaceiris/actions-gh-pages@v4

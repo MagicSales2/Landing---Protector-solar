@@ -119,12 +119,15 @@ const COLOMBIAN_VIDEO_REVIEWS: VideoReview[] = [
 // Un solo lugar donde se decide qué archivo es cada video, y su imagen de
 // portada. La portada pesa ~50 KB contra ~1.7 MB del video: la página no
 // descarga video hasta que la persona decide verlo.
+// Los nombres van sin espacios ni mayúsculas: con espacios hay servidores
+// (Hostinger entre otros) que los rompen al servir, y en la URL hay que
+// codificarlos. Todo en minúsculas y con guion, que funciona en ambos sitios.
 const ARCHIVOS_VIDEO: Record<string, string> = {
-  'vid-1': 'Video 1.mp4',
-  'vid-3': 'Video 3.mp4',
-  'vid-4': 'Video 4.mp4',
-  'vid-5': 'Video 5.mp4',
-  'vid-6': 'Video 6.mp4',
+  'vid-1': 'video-1.mp4',
+  'vid-3': 'video-3.mp4',
+  'vid-4': 'video-4.mp4',
+  'vid-5': 'video-5.mp4',
+  'vid-6': 'video-6.mp4',
 };
 
 const rutaVideo = (id: string) =>
