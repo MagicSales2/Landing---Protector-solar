@@ -139,22 +139,36 @@ docker run -d --rm --name "$NOMBRE_PRUEBA" -p "${PUERTO_PRUEBA}:80" "$IMAGEN" >/
 sleep 3
 
 HTML=$(curl -s "http://127.0.0.1:${PUERTO_PRUEBA}/")
-if echo "$HTML" | grep -q "formulario-pedido"; then
-  info "La página responde y trae el formulario de pedido."
-else
-  error "La imagen nueva no sirve el sitio. NO se cambia nada."
+
+# El index.html que sirve nginx es solo una cáscara: tiene <div id="root"></div>
+# y nada más. La página se dibuja después, con JavaScript. Por eso el formulario
+# NO se busca en el HTML sino dentro del archivo JavaScript.
+ASSET=$(echo "$HTML" | grep -o 'index-[A-Za-z0-9_-]*\.js' | head -1)
+if [ -z "$ASSET" ]; then
+  error "El HTML no referencia ningún JavaScript. NO se cambia nada."
   docker rm -f "$NOMBRE_PRUEBA" >/dev/null 2>&1
   exit 1
 fi
+info "La página referencia: $ASSET"
 
-ASSET=$(echo "$HTML" | grep -o 'index-[A-Za-z0-9_-]*\.js' | head -1)
 CODIGO_ASSET=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PUERTO_PRUEBA}/assets/$ASSET")
 if [ "$CODIGO_ASSET" != "200" ]; then
   error "El JavaScript ($ASSET) no carga (HTTP $CODIGO_ASSET). NO se cambia nada."
   docker rm -f "$NOMBRE_PRUEBA" >/dev/null 2>&1
   exit 1
 fi
-info "JavaScript carga bien: $ASSET"
+info "El JavaScript carga bien (HTTP 200)"
+
+# Ahora sí: el formulario de pedido tiene que estar dentro del JavaScript.
+JS=$(curl -s "http://127.0.0.1:${PUERTO_PRUEBA}/assets/$ASSET")
+if echo "$JS" | grep -q "formulario-pedido"; then
+  info "El JavaScript trae el formulario de pedido."
+else
+  error "El JavaScript no trae el formulario de pedido. NO se cambia nada."
+  docker rm -f "$NOMBRE_PRUEBA" >/dev/null 2>&1
+  exit 1
+fi
+
 docker rm -f "$NOMBRE_PRUEBA" >/dev/null 2>&1
 
 # ============================================================================
@@ -184,6 +198,18 @@ if [ "$CODIGO_DOMINIO" = "200" ]; then
 else
   error "https://${DOMINIO} -> $CODIGO_DOMINIO"
   fallo=1
+fi
+
+# El HTML es una cáscara vacía, así que el formulario se busca en el JS.
+if [ "$CODIGO_DOMINIO" = "200" ]; then
+  ASSET_FINAL=$(curl -s "https://${DOMINIO}/" | grep -o 'index-[A-Za-z0-9_-]*\.js' | head -1)
+  if [ -n "$ASSET_FINAL" ] && \
+     curl -s "https://${DOMINIO}/assets/$ASSET_FINAL" | grep -q "formulario-pedido"; then
+    info "OK   el formulario está en la página ($ASSET_FINAL)"
+  else
+    error "el formulario NO aparece en el dominio"
+    fallo=1
+  fi
 fi
 
 if [ "$fallo" -ne 0 ]; then

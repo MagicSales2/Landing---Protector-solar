@@ -97,7 +97,7 @@ Internet ──https──> Traefik (:443, TLS de Let's Encrypt)
                          │
                          │ red compartida "traefik-proxy"
                          ▼
-                 contenedor landing-protector-solar1 (nginx en :80)
+                 contenedor anthelios_landing_web (nginx en :80)
                          │
                          └── http://72.61.5.135:3001  (prueba directa)
 ```
@@ -108,6 +108,19 @@ repositorio se conecta a ella con `external: true`: no la crea ni la borra.
 
 Las etiquetas `traefik.*` de `docker-compose.yml` son las que arman este
 camino. Traefik las lee solo: no hay que escribirle nada a mano.
+
+Ojo con la diferencia entre la **carpeta** y el **contenedor**, que es la
+confusión más común al trabajar con esto:
+
+| Qué | Cómo se llama | Dónde se cambia |
+|---|---|---|
+| Carpeta en el servidor | `/docker/landing-protector-solar1` | Cuando se clona el repo |
+| Contenedor | `anthelios_landing_web` | `container_name` del compose |
+| Imagen | `landing-actualizado-web` | la genera `docker compose build` |
+
+Los tres nombres son independientes. El script `/actualizarlanding` no depende
+de ninguno: detecta el contenedor por el puerto que publica y arma el nombre
+de la imagen solo.
 
 ## Poner esta landing en otro subdominio
 
@@ -145,9 +158,9 @@ docker exec <contenidor-traefik> cat /etc/traefik/traefik.yml 2>/dev/null \
 #                    letsencrypt:            <-- este nombre es el que va en la etiqueta
 
 # 3. Cómo está el contenedor de la landing ahora mismo (para poder volver atrás)
-docker ps -a --filter name=landing-protector-solar1 \
+docker ps -a --filter name=anthelios_landing_web \
   --format '{{.Names}}  {{.Status}}  {{.Image}}'
-docker inspect landing-protector-solar1 --format '{{.Image}}' > /tmp/imagen-anterior-landing.txt
+docker inspect anthelios_landing_web --format '{{.Image}}' > /tmp/imagen-anterior-landing.txt
 ```
 
 Si el nombre del resolver no es `letsencrypt`, hay que corregir
@@ -186,7 +199,7 @@ docker rm -f prueba-landing
 # Si el paso 3 no devuelve el HTML con el script, PARAR acá. No seguir.
 
 # 4. Cambiar el contenedor que está sirviendo
-docker stop landing-protector-solar1
+docker stop anthelios_landing_web
 docker compose up -d
 docker compose ps
 docker compose logs --tail=30
@@ -210,8 +223,8 @@ cat /tmp/imagen-anterior-landing.txt
 Con ese ID:
 
 ```bash
-docker rm -f landing-protector-solar1
-docker run -d --name landing-protector-solar1 -p 3001:80 --restart always \
+docker rm -f anthelios_landing_web
+docker run -d --name anthelios_landing_web -p 3001:80 --restart always \
   sha256:<ID-ANTERIOR>
 ```
 
