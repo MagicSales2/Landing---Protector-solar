@@ -101,7 +101,7 @@ async function avisarTiktok(sb: SupabaseClient, fila: any) {
       value: Number(fila.total_price),
       currency: 'COP',
       content_name: fila.offer_name || 'Protector Solar Anthelios SPF 50+',
-      content_ids: [fila.offer_id || 'anthelios'],
+      content_ids: [fila.offer_id || 'anthelios-protector-solar'],
       quantity: Number(fila.quantity),
       user_agent: fila.user_agent,
       referrer: fila.referrer,

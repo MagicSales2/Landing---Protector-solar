@@ -113,7 +113,7 @@ export function trackPageView(contenido?: { content_name?: string; content_categ
  * algo de verdad. Si algún sitio del código se olvida de ponerlo, esta función
  * lo completa sola y el evento nunca sale sin él.
  */
-const CONTENT_ID_POR_DEFECTO = 'skin-ofertas-protector-solar';
+const CONTENT_ID_POR_DEFECTO = 'anthelios-protector-solar';
 
 function completarContenido(eventName: string, data?: Record<string, any>) {
   const contenido: Record<string, any> = { ...(data || {}) };
@@ -128,7 +128,7 @@ function completarContenido(eventName: string, data?: Record<string, any>) {
 
   // El resto de parámetros de producto que TikTok espera junto al content_id.
   if (!contenido.content_type) contenido.content_type = 'product';
-  if (!contenido.content_name) contenido.content_name = 'Protector Solar Skin Ofertas';
+  if (!contenido.content_name) contenido.content_name = 'Protector Solar Anthelios SPF 50+';
   if (contenido.quantity === undefined && contenido.num_items !== undefined) {
     contenido.quantity = contenido.num_items;
   }

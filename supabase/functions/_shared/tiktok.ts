@@ -98,10 +98,19 @@ export async function enviarEventoTiktok(
   if (evento.client_ip) user.client_ip_address = evento.client_ip
   if (evento.user_agent) user.client_user_agent = evento.user_agent
 
+  const cantidad = evento.quantity ?? 1
+  const valorTotal = evento.value ?? 0
+  // TikTok separa los dos campos:
+  //   "price" = precio de UNA unidad del producto
+  //   "value" = valor TOTAL del pedido
+  // Mandar el total en "price" hace que el optimizador calcule mal cuando el
+  // pedido lleva varias unidades (una oferta de 3 unidades vale el triple).
+  const precioUnitario = Math.round(valorTotal / (cantidad > 0 ? cantidad : 1))
+
   const cuerpo = {
     event_source: 'web',
     event_source_id: pixelId,
-    // Cuando seeda "test_event_code" de TikTok, los eventos llegan a prueba.
+    // Cuando se manda "test_event_code" de TikTok, los eventos llegan a prueba.
     ...(Deno.env.get('TIKTOK_TEST_CODE') ? { test_event_code: Deno.env.get('TIKTOK_TEST_CODE') } : {}),
     data: {
       event: evento.event,
@@ -116,8 +125,9 @@ export async function enviarEventoTiktok(
         content_type: evento.content_type || 'product',
         content_id: evento.content_ids?.[0] || evento.order_id,
         content_name: evento.content_name || 'Protector Solar Anthelios SPF 50+',
-        quantity: evento.quantity ?? 1,
-        price: evento.value ?? 0,
+        quantity: cantidad,
+        price: precioUnitario,
+        value: valorTotal,
         currency: evento.currency || 'COP',
       },
     },

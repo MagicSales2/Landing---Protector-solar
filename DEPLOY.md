@@ -97,7 +97,7 @@ Internet ──https──> Traefik (:443, TLS de Let's Encrypt)
                          │
                          │ red compartida "traefik-proxy"
                          ▼
-                 contenedor anthelios_landing_web (nginx en :80)
+                 contenedor landing-protector-solar1 (nginx en :80)
                          │
                          └── http://72.61.5.135:3001  (prueba directa)
 ```
@@ -145,9 +145,9 @@ docker exec <contenidor-traefik> cat /etc/traefik/traefik.yml 2>/dev/null \
 #                    letsencrypt:            <-- este nombre es el que va en la etiqueta
 
 # 3. Cómo está el contenedor de la landing ahora mismo (para poder volver atrás)
-docker ps -a --filter name=anthelios_landing_web \
+docker ps -a --filter name=landing-protector-solar1 \
   --format '{{.Names}}  {{.Status}}  {{.Image}}'
-docker inspect anthelios_landing_web --format '{{.Image}}' > /tmp/imagen-anterior.txt
+docker inspect landing-protector-solar1 --format '{{.Image}}' > /tmp/imagen-anterior-landing.txt
 ```
 
 Si el nombre del resolver no es `letsencrypt`, hay que corregir
@@ -186,7 +186,7 @@ docker rm -f prueba-landing
 # Si el paso 3 no devuelve el HTML con el script, PARAR acá. No seguir.
 
 # 4. Cambiar el contenedor que está sirviendo
-docker stop anthelios_landing_web
+docker stop landing-protector-solar1
 docker compose up -d
 docker compose ps
 docker compose logs --tail=30
@@ -204,14 +204,14 @@ curl -s -o /dev/null -w 'dominio:     %{http_code}\n' https://protectorsolar.ski
 
 ```bash
 # Volver a la imagen anterior (el ID quedó guardado en el paso 3 de la inspection)
-cat /tmp/imagen-anterior.txt
+cat /tmp/imagen-anterior-landing.txt
 ```
 
 Con ese ID:
 
 ```bash
-docker rm -f anthelios_landing_web
-docker run -d --name anthelios_landing_web -p 3001:80 --restart always \
+docker rm -f landing-protector-solar1
+docker run -d --name landing-protector-solar1 -p 3001:80 --restart always \
   sha256:<ID-ANTERIOR>
 ```
 

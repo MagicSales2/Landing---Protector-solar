@@ -74,7 +74,7 @@ export default function App() {
     initTracking();
     trackPixelEvent('ViewContent', {
       content_id: 'skin-ofertas-landing',
-      content_name: 'Landing Skin Ofertas - Protector Solar',
+      content_name: 'Protector Solar Anthelios SPF 50+',
       content_type: 'product',
       num_items: 1,
       value: ofertas.length ? ofertas[0].price : 0,
