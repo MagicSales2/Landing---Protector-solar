@@ -250,7 +250,7 @@ Hay un script que hace todo el procedimiento en un solo comando. Se baja
 directo de GitHub, así que no hay que subirlo a mano al servidor:
 
 ```bash
-curl -O https://raw.githubusercontent.com/MagicSales2/Landing---Protector-solar/home/actualizarlanding.sh
+curl -o actualizarlanding.sh "https://raw.githubusercontent.com/MagicSales2/Landing---Protector-solar/home/actualizarlanding.sh?x=$(date +%s)"
 bash actualizarlanding.sh
 ```
 
@@ -293,3 +293,9 @@ proyecto con otro dominio, se copian y se cambian:
 ```bash
 RAMA / REPO / CARPETA / IMAGEN / CONTENEDOR / PUERTO_LOCAL / DOMINIO
 ```
+
+> El `?x=$(date +%s)` al final no es decorativo. GitHub guarda una copia de
+> los archivos en sus servidores de caché y a veces sirve la versión anterior
+> unos minutos después de un push. Ese parámetro le pregunta siempre por la
+> versión nueva. Si el script se descarga de 8679 bytes en vez de 9725, es que
+> te sirvió la copia vieja.

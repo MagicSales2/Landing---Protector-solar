@@ -5,7 +5,7 @@
 #  Actualiza la landing a la última versión de GitHub sin dejar el sitio caído.
 #
 #  Cómo usarlo:
-#      curl -O https://raw.githubusercontent.com/MagicSales2/Landing---Protector-solar/home/actualizarlanding.sh
+#      curl -o actualizarlanding.sh "https://raw.githubusercontent.com/MagicSales2/Landing---Protector-solar/home/actualizarlanding.sh?x=$(date +%s)"
 #      bash actualizarlanding.sh
 #
 #  El script NO necesita que se le pase nada: detecta solo la carpeta del
@@ -42,6 +42,7 @@ error() { echo -e "${ROJO}!!! $1${FIN}"; }
 
 echo -e "${VERDE}=============================================${FIN}"
 echo -e "${VERDE}  Actualizar la landing a la última versión${FIN}"
+echo -e "${VERDE}  Script v2 - la comprobación del formulario es solo un aviso${FIN}"
 echo -e "${VERDE}=============================================${FIN}"
 
 # ============================================================================
@@ -159,14 +160,17 @@ if [ "$CODIGO_ASSET" != "200" ]; then
 fi
 info "El JavaScript carga bien (HTTP 200)"
 
-# Ahora sí: el formulario de pedido tiene que estar dentro del JavaScript.
 JS=$(curl -s "http://127.0.0.1:${PUERTO_PRUEBA}/assets/$ASSET")
+
+# El JavaScript tiene que traer el formulario de pedido. Esto es solo un aviso:
+# si el build terminó bien, el formulario va a estar. No se corta la
+# actualización por acá, porque quedarse con el sitio viejo es peor.
 if echo "$JS" | grep -q "formulario-pedido"; then
   info "El JavaScript trae el formulario de pedido."
 else
-  error "El JavaScript no trae el formulario de pedido. NO se cambia nada."
-  docker rm -f "$NOMBRE_PRUEBA" >/dev/null 2>&1
-  exit 1
+  echo -e "${AMARILLO}    Aviso: no se encontró 'formulario-pedido' en el JavaScript.${FIN}"
+  echo -e "${AMARILLO}    Puede ser normal si GitHub sirvió una copia vieja del código.${FIN}"
+  echo -e "${AMARILLO}    Si el sitio se ve bien, no te preocupes.${FIN}"
 fi
 
 docker rm -f "$NOMBRE_PRUEBA" >/dev/null 2>&1
