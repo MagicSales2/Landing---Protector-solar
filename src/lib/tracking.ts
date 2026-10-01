@@ -132,6 +132,14 @@ function completarContenido(eventName: string, data?: Record<string, any>) {
   if (contenido.quantity === undefined && contenido.num_items !== undefined) {
     contenido.quantity = contenido.num_items;
   }
+  // TikTok separa el precio de UNA unidad del valor total del pedido. Si no se
+  // manda "price", el optimizador no puede calcular bien las conversiones de
+  // los anuncios de Video Shopping Ads.
+  if (contenido.price === undefined) {
+    const valor = Number(contenido.value ?? 0);
+    const cantidad = Number(contenido.quantity ?? contenido.num_items ?? 0);
+    contenido.price = cantidad > 0 ? Math.round(valor / cantidad) : valor;
+  }
 
   return contenido;
 }

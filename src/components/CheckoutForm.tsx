@@ -171,6 +171,20 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
       num_items: newOrder.quantity,
     });
 
+    // InitiatePayment: el pedido quedó registrado y la persona entró al
+    // proceso de pago. Con Wompi significa que va a la pasarela; con Contra
+    // Entrega que ya se dépenserá el proceso al recibir. Sirve para que TikTok
+    // sepa cuántas personas empezaron a pagar aunque muchas no terminen, que
+    // es justo el dato que optimiza el CPA.
+    trackPixelEvent('InitiatePayment', {
+      value: newOrder.totalPrice,
+      currency: 'COP',
+      content_id: newOrder.offerId,
+      content_name: newOrder.offerName,
+      content_type: 'product',
+      num_items: newOrder.quantity,
+    });
+
     // Con Contra Entrega el pago ocurre cuando el cliente recibe el paquete,
     // así que desde ya la venta está comprometida y se cuenta como
     // conversión. Con Wompi no: el pago aún no está confirmado y el evento lo

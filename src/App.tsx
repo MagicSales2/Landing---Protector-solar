@@ -184,6 +184,20 @@ export default function App() {
   const handleOfferSelectAndScroll = (id: string) => {
     setSelectedOfferId(id);
     const selectedOffer = ofertas.find(o => o.id === id);
+
+    // AddToCart: la persona eligió un producto y lo "agregó" a su pedido.
+    // En una landing no hay carrito de verdad, así que elegir la promoción
+    // es el momento equivalente. TikTok lo pide como paso previo a
+    // InitiateCheckout para poder medir el embudo completo.
+    trackPixelEvent('AddToCart', {
+      content_id: selectedOffer?.id || 'skin-ofertas-landing',
+      content_name: selectedOffer?.name || 'Selección de oferta',
+      content_type: 'product',
+      num_items: selectedOffer?.quantity || 1,
+      value: selectedOffer?.price || 0,
+      currency: 'COP',
+    });
+
     if (selectedOffer) {
       trackPixelEvent('InitiateCheckout', {
         content_id: selectedOffer.id,
@@ -203,6 +217,21 @@ export default function App() {
       });
     }
     irAlFormulario();
+  };
+
+  // Cambiar de oferta dentro del formulario también cuenta como agregar al
+  // carrito: el producto sigue mientras la persona arma su pedido.
+  const handleOfferChangeInForm = (id: string) => {
+    setSelectedOfferId(id);
+    const eleccion = ofertas.find(o => o.id === id);
+    trackPixelEvent('AddToCart', {
+      content_id: eleccion?.id || 'skin-ofertas-landing',
+      content_name: eleccion?.name || 'Cambio de oferta en el formulario',
+      content_type: 'product',
+      num_items: eleccion?.quantity || 1,
+      value: eleccion?.price || 0,
+      currency: 'COP',
+    });
   };
 
   const handleOrderSuccess = (order: Order) => {
@@ -717,7 +746,7 @@ export default function App() {
           {/* Formulario de compra: siempre a la vista en esta sección */}
           <CheckoutForm
             selectedOfferId={selectedOfferId}
-            onOfferSelect={(id) => setSelectedOfferId(id)}
+            onOfferSelect={handleOfferChangeInForm}
             onOrderSuccess={handleOrderSuccess}
             offers={ofertas}
           />

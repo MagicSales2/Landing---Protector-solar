@@ -228,3 +228,42 @@ En el panel de `skinoferta.cloud`:
 
 Y el puerto **80 tiene que quedar abierto**, porque es el que usa
 Let's Encrypt para validar el certificado. El 443 también.
+
+---
+
+# `/actualizarlanding`
+
+Hay un script que hace todo el procedimiento en un solo comando:
+
+```bash
+bash /docker/landing-nuevo/actualizarlanding.sh
+```
+
+Se puede volver a ejecutar cada vez que haya cambios nuevos en GitHub.
+Hace lo mismo que el paso a paso de esta página, en orden y con las mismas
+salvaguardas:
+
+| Paso | Qué hace | Si falla |
+|---|---|---|
+| 1 | Baja la rama `home` de GitHub | No toca nada |
+| 2 | Construye la imagen sin caché | No toca nada |
+| 3 | La prueba en el puerto 3002, aparte | **No toca nada** |
+| 4 | Cambia el contenedor | — |
+| 5 | Verifica 3001, el dominio y el formulario | Vuelve atrás solo |
+| 6 | Confirma | — |
+
+Guarda el ID de la imagen anterior en `/tmp/imagen-anterior-landing.txt`.
+Si la verificación del paso 5 falla, el script restaura esa imagen
+automáticamente y avisa por pantalla.
+
+Después de actualizar, hay que recargar el navegador con `Ctrl+Shift+R`
+para ver el cambio: el navegador guarda la versión anterior.
+
+## Cambiar el subdominio o el contenedor
+
+Al principio del script están todas las variables. Si algún día hay otro
+proyecto con otro dominio, se copian y se cambian:
+
+```bash
+RAMA / REPO / CARPETA / IMAGEN / CONTENEDOR / PUERTO_LOCAL / DOMINIO
+```
