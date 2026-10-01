@@ -17,10 +17,12 @@ const SUPABASE_ANON =
 let inicio: number;
 let visitaId: number | null = null;
 
-// TikTok deja la cookie "ttp" para poder saber quién es el visitante. Va sin
-// cifrar a la Events API, junto con la IP.
+// TikTok deja una cookie con su identificador de visitante. En la documentación
+// el parámetro se llama "ttp", pero la cookie que escribe el script de TikTok
+// viene con guion bajo ("_ttp"), así que se leen las dos: si solo se busca "ttp"
+// nunca se encuentra y el emparejamiento con el anuncio se pierde.
 function leerCookieTtp(): string | undefined {
-  const match = document.cookie.match(/(?:^|;\s*)ttp=([^;]+)/);
+  const match = document.cookie.match(/(?:^|;\s*)(?:_ttp|ttp)=([^;]+)/);
   return match ? decodeURIComponent(match[1]).slice(0, 200) : undefined;
 }
 

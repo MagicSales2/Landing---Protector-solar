@@ -138,8 +138,12 @@ export function leerTtclid(): string | undefined {
   return valor ? valor.slice(0, 200) : undefined;
 }
 
+// TikTok deja una cookie con su identificador de visitante. En la documentación
+// el parámetro se llama "ttp", pero la cookie que escribe el script de TikTok
+// viene con guion bajo ("_ttp"), así que se leen las dos: si solo se busca "ttp"
+// nunca se encuentra y el emparejamiento con el anuncio se pierde.
 export function leerTtp(): string | undefined {
-  const match = document.cookie.match(/(?:^|;\s*)ttp=([^;]+)/);
+  const match = document.cookie.match(/(?:^|;\s*)(?:_ttp|ttp)=([^;]+)/);
   return match ? decodeURIComponent(match[1]).slice(0, 200) : undefined;
 }
 

@@ -380,10 +380,18 @@ Deno.serve(async (req) => {
   // TikTok y la campaña no aprende. Mandándolos desde acá, el evento entra
   // igual, con los datos del cliente cifrados.
   //
+  // Los nombres tienen que ser EXACTAMENTE los de la lista estándar de TikTok.
+  // Cualquier otro nombre (tipo "SubmitForm" o "InitiatePayment") igual lo
+  // acepta la API y aparece en el reporte, pero lo trata como evento
+  // personalizado: NO se puede usar como objetivo de optimización y no
+  // alimenta el modelo que optimiza la campaña. Por eso acá solo van nombres
+  // de la lista oficial.
+  //
   // Se mandan tres, y cada uno dice algo distinto:
-  //   - SubmitForm: la persona dejó sus datos. Es el lead, y es lo que más
-  //     pesa acá, porque casi todo el tráfico se va sin comprar.
-  //   - InitiateCheckout: llegó al último paso del formulario.
+  //   - InitiateCheckout: la persona está tramitando el pago.
+  //   - PlaceAnOrder: el pedido quedó registrado. TikTok lo recomienda
+  //     justamente para cuando el pedido y el pago NO ocurren al mismo tiempo,
+  //     que es el caso de Contra Entrega acá.
   //   - Purchase: la venta. En Contra Entrega el dinero se cobra al recibir,
   //     así que el pedido ya cuenta como venta al crearse; por eso antes solo
   //     se registraban las de Wompi y las más frecuentes no contaban.
@@ -409,7 +417,7 @@ Deno.serve(async (req) => {
     ttp: texto(entrada.ttp, 200) || undefined,
   }
 
-  for (const nombre of ['SubmitForm', 'InitiateCheckout', 'Purchase'] as const) {
+  for (const nombre of ['InitiateCheckout', 'PlaceAnOrder', 'Purchase'] as const) {
     try {
       await enviarEventoTiktok(
         { ...datosTiktok, event: nombre, event_id: id },

@@ -194,8 +194,14 @@ export function trackPixelEvent(eventName: string, data?: { value?: number; curr
       } else if (eventName === 'InitiateCheckout') {
         (window as any).ttq.track('InitiateCheckout', datos);
       } else if (eventName === 'Lead') {
-        // El píxel de TikTok llama "SubmitForm" a lo que en Meta es "Lead".
-        (window as any).ttq.track('SubmitForm', datos);
+        // Para TikTok NO se manda nada desde acá. Antes se traducía a
+        // "SubmitForm", pero ese nombre NO está en la lista de eventos estándar
+        // de TikTok: entraba como evento personalizado, se veía en el reporte
+        // pero no podía usarse como objetivo de optimización. Para Meta sí se
+        // manda "Lead", que ahí sí es estándar.
+        // El lead en TikTok se mide con PlaceAnOrder, que manda el servidor
+        // cuando el pedido queda registrado.
+        console.log('[TikTok Pixel Evento] Lead omitido: usa PlaceAnOrder del servidor');
       } else {
         (window as any).ttq.track(eventName, datos);
       }
