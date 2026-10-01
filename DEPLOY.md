@@ -168,8 +168,8 @@ sirviendo.
 # 1. Código limpio, en una carpeta nueva (la vieja no es un repo Git)
 cd /docker
 git clone --branch home --depth 1 \
-  https://github.com/MagicSales2/Landing---Protector-solar.git landing-nuevo
-cd landing-nuevo
+  https://github.com/MagicSales2/Landing---Protector-solar.git landing-actualizado
+cd landing-actualizado
 git log --oneline -1          # tiene que ser c43dea2
 
 # 2. Construir la imagen nueva, sin caché
@@ -233,27 +233,40 @@ Let's Encrypt para validar el certificado. El 443 también.
 
 # `/actualizarlanding`
 
-Hay un script que hace todo el procedimiento en un solo comando:
+Hay un script que hace todo el procedimiento en un solo comando. Se baja
+directo de GitHub, así que no hay que subirlo a mano al servidor:
 
 ```bash
-bash /docker/landing-nuevo/actualizarlanding.sh
+curl -O https://raw.githubusercontent.com/MagicSales2/Landing---Protector-solar/home/actualizarlanding.sh
+bash actualizarlanding.sh
 ```
 
-Se puede volver a ejecutar cada vez que haya cambios nuevos en GitHub.
-Hace lo mismo que el paso a paso de esta página, en orden y con las mismas
-salvaguardas:
+**No hay que pasarle ninguna ruta.** El script detecta solo:
+
+- Qué contenedor está publicando el puerto 3001
+- En qué carpeta está el proyecto, y si es un repositorio Git o una copia vieja
+- El nombre de la imagen, para poder volver atrás
+
+Si el nombre del contenedor del compose no coincide con el que ya está
+corriendo, lo ajusta solo antes de arrancar, para que no choquen.
+
+Si el proyecto en `/docker` es una copia vieja sin Git, no le importa: el
+script siempre descarga el código limpio de GitHub a `/docker/landing-actualizado`.
+
+Se puede volver a ejecutar cada vez que haya cambios nuevos. Hace lo mismo
+que el paso a paso de esta página, en orden y con las mismas salvaguardas:
 
 | Paso | Qué hace | Si falla |
 |---|---|---|
-| 1 | Baja la rama `home` de GitHub | No toca nada |
-| 2 | Construye la imagen sin caché | No toca nada |
-| 3 | La prueba en el puerto 3002, aparte | **No toca nada** |
-| 4 | Cambia el contenedor | — |
-| 5 | Verifica 3001, el dominio y el formulario | Vuelve atrás solo |
-| 6 | Confirma | — |
+| 1 | Detecta contenedor, carpeta e imagen | No toca nada |
+| 2 | Baja la rama `home` de GitHub | No toca nada |
+| 3 | Construye la imagen sin caché | No toca nada |
+| 4 | La prueba en el puerto 3002, aparte | **No toca nada** |
+| 5 | Cambia el contenedor | — |
+| 6 | Verifica 3001, el dominio y el formulario | Vuelve atrás solo |
 
 Guarda el ID de la imagen anterior en `/tmp/imagen-anterior-landing.txt`.
-Si la verificación del paso 5 falla, el script restaura esa imagen
+Si la verificación del paso 6 falla, el script restaura esa imagen
 automáticamente y avisa por pantalla.
 
 Después de actualizar, hay que recargar el navegador con `Ctrl+Shift+R`
