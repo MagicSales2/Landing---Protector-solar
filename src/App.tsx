@@ -72,14 +72,10 @@ export default function App() {
   // Initialize tracking on mount
   useEffect(() => {
     initTracking();
-    trackPixelEvent('ViewContent', {
-      content_id: 'skin-ofertas-landing',
-      content_name: 'Protector Solar Anthelios SPF 50+',
-      content_type: 'product',
-      num_items: 1,
-      value: ofertas.length ? ofertas[0].price : 0,
-      currency: 'COP',
-    });
+    // ViewContent NO se manda desde acá a propósito: lo manda el servidor, en
+    // registrar-visita, apenas registra la visita. Mandarlo en los dos lados
+    // cuenta la visita doble, porque el píxel no lleva event_id y TikTok no
+    // tiene forma de saber que son la misma.
     iniciarRastreoVisitas();
   }, []);
 

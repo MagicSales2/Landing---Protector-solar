@@ -11,6 +11,7 @@
 // ============================================================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { enviarEventoTiktok } from '../_shared/tiktok.ts'
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -87,6 +88,39 @@ Deno.serve(async (req) => {
       console.error('No se pudo registrar la visita:', error)
       return json({ ok: false }, 500)
     }
+
+    // ViewContent desde el servidor. El píxel del navegador ya manda este
+    // evento, pero se lo comen los ad-blockers y el modo incógnito, y entonces
+    // TikTok no ve nada de ese tráfico. Mandándolo desde acá se registra
+    // igual, y es lo que le dice a TikTok qué contenido se está viendo.
+    //
+    // El event_id lleva el id de la visita: si el píxel también lo mandó con el
+    // mismo, TikTok cuenta una sola vista y no dos.
+    try {
+      const ip = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim() ||
+        req.headers.get('cf-connecting-ip') || ''
+      await enviarEventoTiktok({
+        event: 'ViewContent',
+        event_id: `visita-${insertada.id}`,
+        order_id: `visita-${insertada.id}`,
+        content_name: 'Protector Solar Anthelios SPF 50+',
+        content_type: 'product',
+        quantity: 1,
+        value: 0,
+        currency: 'COP',
+        content_ids: ['anthelios-protector-solar'],
+        page_url: texto(cuerpo.pageUrl, 500) || undefined,
+        referrer: texto(cuerpo.referrer, 300) || undefined,
+        user_agent: texto(cuerpo.userAgent, 300) || undefined,
+        client_ip: ip || undefined,
+        ttclid: texto(cuerpo.ttclid, 200) || undefined,
+        ttp: texto(cuerpo.ttp, 200) || undefined,
+      })
+    } catch (err) {
+      // Nunca debe romper el registro de la visita: el evento es un extra.
+      console.error('Fallo al enviar ViewContent a TikTok:', err)
+    }
+
     return json({ ok: true, visitaId: insertada.id })
   }
 

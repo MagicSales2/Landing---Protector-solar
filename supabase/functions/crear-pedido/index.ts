@@ -373,44 +373,56 @@ Deno.serve(async (req) => {
     kommoResumen = `⚠️ Kommo: ${detalle.slice(0, 160)}`
   }
 
-  // --- 6b) Evento de compra para TikTok (Events API).
-  // En Contra Entrega el dinero se cobra al recibir, así que el pedido ya
-  // cuenta como venta en el momento en que se crea. Sin esto, TikTok solo
-  // registraba las compras con Wompi (que pasan por confirmarVenta) y las
-  // ventas más frecuentes no contaban como conversiones.
-  // El event_id es el id del pedido: es el mismo que manda el navegador en su
-  // Purchase, así que TikTok cuenta la venta una sola vez.
-  try {
-    await enviarEventoTiktok(
-      {
-        event: 'Purchase',
-        event_id: id,
-        order_id: id,
-        content_name: oferta.nombre,
-        content_type: 'product',
-        quantity: oferta.cantidad,
-        value: oferta.precio,
-        currency: 'COP',
-        client_email: correo,
-        client_phone: celular,
-        document_id: documento,
-        content_ids: [oferta.id],
-        page_url: texto(entrada.pageUrl, 500) || undefined,
-        referrer: texto(entrada.referrer, 300) || undefined,
-        user_agent: texto(entrada.userAgent, 300) || undefined,
-        client_ip: texto(entrada.clientIp, 60) || undefined,
-        ttclid: texto(entrada.ttclid, 200) || undefined,
-        ttp: texto(entrada.ttp, 200) || undefined,
-      },
-      async (estado, detalle) => {
-        await sb
-          .from('sync_log')
-          .insert({ pedido_id: id, destino: 'tiktok', estado, detalle: detalle.slice(0, 500) })
-      },
-    )
-  } catch (err) {
-    const detalle = err instanceof Error ? err.message : String(err)
-    console.error('Fallo al enviar evento a TikTok:', detalle)
+  // --- 6b) Eventos para TikTok (Events API).
+  //
+  // TikTok pide al menos 3 eventos del servidor. Con el píxel solamente, si un
+  // ad-blocker o el modo incógnito se comen el script, la venta no existe para
+  // TikTok y la campaña no aprende. Mandándolos desde acá, el evento entra
+  // igual, con los datos del cliente cifrados.
+  //
+  // Se mandan tres, y cada uno dice algo distinto:
+  //   - SubmitForm: la persona dejó sus datos. Es el lead, y es lo que más
+  //     pesa acá, porque casi todo el tráfico se va sin comprar.
+  //   - InitiateCheckout: llegó al último paso del formulario.
+  //   - Purchase: la venta. En Contra Entrega el dinero se cobra al recibir,
+  //     así que el pedido ya cuenta como venta al crearse; por eso antes solo
+  //     se registraban las de Wompi y las más frecuentes no contaban.
+  //
+  // El event_id es el id del pedido: es el mismo que manda el navegador, así que
+  // si un evento llega por los dos lados TikTok cuenta UNO solo.
+  const datosTiktok = {
+    order_id: id,
+    content_name: oferta.nombre,
+    content_type: 'product',
+    quantity: oferta.cantidad,
+    value: oferta.precio,
+    currency: 'COP',
+    client_email: correo,
+    client_phone: celular,
+    document_id: documento,
+    content_ids: [oferta.id],
+    page_url: texto(entrada.pageUrl, 500) || undefined,
+    referrer: texto(entrada.referrer, 300) || undefined,
+    user_agent: texto(entrada.userAgent, 300) || undefined,
+    client_ip: texto(entrada.clientIp, 60) || undefined,
+    ttclid: texto(entrada.ttclid, 200) || undefined,
+    ttp: texto(entrada.ttp, 200) || undefined,
+  }
+
+  for (const nombre of ['SubmitForm', 'InitiateCheckout', 'Purchase'] as const) {
+    try {
+      await enviarEventoTiktok(
+        { ...datosTiktok, event: nombre, event_id: id },
+        async (estado, detalle) => {
+          await sb
+            .from('sync_log')
+            .insert({ pedido_id: id, destino: 'tiktok', estado, detalle: detalle.slice(0, 500) })
+        },
+      )
+    } catch (err) {
+      const detalle = err instanceof Error ? err.message : String(err)
+      console.error(`Fallo al enviar ${nombre} a TikTok:`, detalle)
+    }
   }
 
   // --- 7) Guía de envío. En Contra Entrega se genera al llegar el pedido

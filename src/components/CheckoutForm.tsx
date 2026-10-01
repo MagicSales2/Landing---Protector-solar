@@ -162,7 +162,12 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
     // OJO: aquí NO se manda el evento "Purchase" porque el cliente todavía no
     // ha pagado. Se manda "Lead" (dejó sus datos), que sí es verdad.
     // "Purchase" solo debe enviarse cuando el pago esté confirmado.
+    //
+    // El event_id es el id del pedido: es el mismo que usa el servidor por la
+    // Events API para el SubmitForm, así que si llega por los dos lados TikTok
+    // cuenta un solo lead.
     trackPixelEvent('Lead', {
+      event_id: newOrder.id,
       value: newOrder.totalPrice,
       currency: 'COP',
       content_id: newOrder.offerId,
@@ -171,12 +176,19 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
       num_items: newOrder.quantity,
     });
 
-    // InitiatePayment: el pedido quedó registrado y la persona entró al
-    // proceso de pago. Con Wompi significa que va a la pasarela; con Contra
-    // Entrega que ya se dépenserá el proceso al recibir. Sirve para que TikTok
-    // sepa cuántas personas empezaron a pagar aunque muchas no terminen, que
-    // es justo el dato que optimiza el CPA.
-    trackPixelEvent('InitiatePayment', {
+    // AddPaymentInfo: el pedido quedó registrado y la persona ya dejó sus datos
+    // de contacto y entrega, o sea que entró al proceso de pago. Con Wompi
+    // significa que va a la pasarela; con Contra Entrega que ya se desquitä al
+    // recibir. Sirve para que TikTok sepa cuántas personas empezaron a pagar
+    // aunque muchas no terminen, que es el dato que optimiza el CPA.
+    //
+    // Antes esto se mandaba como "InitiatePayment". Ese nombre no existe en
+    // ninguna lista oficial de TikTok: entraba como evento personalizado, se
+    // veía en los reportes pero NO podía usarse como objetivo de optimización.
+    // "AddPaymentInfo" es el estándar equivalente (objetivo Sales) y además
+    // lleva event_id, que antes faltaba.
+    trackPixelEvent('AddPaymentInfo', {
+      event_id: newOrder.id,
       value: newOrder.totalPrice,
       currency: 'COP',
       content_id: newOrder.offerId,

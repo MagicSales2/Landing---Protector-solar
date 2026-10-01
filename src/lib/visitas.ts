@@ -17,6 +17,13 @@ const SUPABASE_ANON =
 let inicio: number;
 let visitaId: number | null = null;
 
+// TikTok deja la cookie "ttp" para poder saber quién es el visitante. Va sin
+// cifrar a la Events API, junto con la IP.
+function leerCookieTtp(): string | undefined {
+  const match = document.cookie.match(/(?:^|;\s*)ttp=([^;]+)/);
+  return match ? decodeURIComponent(match[1]).slice(0, 200) : undefined;
+}
+
 function urlFuncion(): string {
   return `${SUPABASE_URL}/functions/v1/registrar-visita`;
 }
@@ -55,6 +62,12 @@ export function iniciarRastreoVisitas() {
       referrer: document.referrer || '',
       utm,
       userAgent: navigator.userAgent,
+      // El ttclid viene en la URL cuando el visitante llega desde un anuncio de
+      // TikTok, y el ttp es la cookie de TikTok. Con los dos, el servidor puede
+      // emparejar la visita con el anuncio que la trajo.
+      ttclid: params.get('ttclid') || undefined,
+      ttp: leerCookieTtp(),
+      pageUrl: window.location.href,
     }),
   })
     .then((r) => r.json().catch(() => null))
