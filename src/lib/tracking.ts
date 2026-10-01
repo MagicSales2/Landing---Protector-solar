@@ -32,31 +32,66 @@ export function initTracking() {
   }
 
   // 2. TikTok Pixel Integration
+  // Se usa el snippet oficial de TikTok tal cual (el que entrega el Events
+  // Manager). Es importante que sea ÉSTE y no una variante: el script se pide
+  // con ?sdkid=...&lib=ttq y sin esos parámetros el pixel carga pero no sabe
+  // qué píxel enviarle los eventos.
   if (tiktokPixelId) {
     try {
-      (function(w,d,t){
-        (w as any).TiktokAnalyticsObject=t;
-        var ttq=(w as any)[t]=(w as any)[t]||[];
-        ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","trackWithSegmentAuid","setAndVerifyTTUID","detect","enableCookie","disableCookie"];
-        ttq.setAndVerifyTTUID=function(t,e){return this.setTTUID(t,e)};
-        ttq.instance=function(t){for(var e=ttq._i[t]||[],n=0;n<ttq.methods.length;n++)ttq.set_method(e,ttq.methods[n]);return e};
-        ttq.profile=function(t,e,n){ttq._i[t]=ttq._i[t]||[];for(var r=0;r<ttq.methods.length;r++)ttq.set_method(ttq._i[t],ttq.methods[r]);ttq._i[t].push([t,e,n])};
-        ttq.set_method=function(t,e){t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}};
-        ttq.load=function(e,n){var r="https://analytics.tiktok.com/i18n/pixel/events.js";
-        ttq._i=ttq._i||{},ttq._i[e]=[],ttq._i[e]._u=r,ttq._t=ttq._t||{},ttq._t[e]=+new Date,ttq._o=ttq._o||{},ttq._o[e]=n||{};
-        var a=d.createElement("script");a.type="text/javascript",a.async=!0,a.src=r;
-        var i=d.getElementsByTagName("script")[0];i.parentNode?.insertBefore(a,i)};
-        
+      (function (w, d, t) {
+        (window as any).TiktokAnalyticsObject = t;
+        var ttq = (w[t] = w[t] || []);
+        ttq.methods = ["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie","holdConsent","revokeConsent","grantConsent"];
+        ttq.setAndDefer = function (t, e) {
+          t[e] = function () { t.push([e].concat(Array.prototype.slice.call(arguments, 0))) };
+        };
+        for (var i = 0; i < ttq.methods.length; i++) ttq.setAndDefer(ttq, ttq.methods[i]);
+        ttq.instance = function (t) {
+          var e = ttq._i[t] || [];
+          for (var n = 0; n < ttq.methods.length; n++) ttq.setAndDefer(e, ttq.methods[n]);
+          return e;
+        };
+        ttq.load = function (e, n) {
+          var r = "https://analytics.tiktok.com/i18n/pixel/events.js";
+          var o = n && n.partner;
+          ttq._i = ttq._i || {};
+          ttq._i[e] = [];
+          ttq._i[e]._u = r;
+          ttq._t = ttq._t || {};
+          ttq._t[e] = +new Date;
+          ttq._o = ttq._o || {};
+          ttq._o[e] = n || {};
+          n = d.createElement("script");
+          n.type = "text/javascript";
+          n.async = !0;
+          n.src = r + "?sdkid=" + e + "&lib=" + t;
+          e = d.getElementsByTagName("script")[0];
+          e.parentNode.insertBefore(n, e);
+        };
+
         ttq.load(tiktokPixelId);
         ttq.page();
-        console.log(`[TikTok Pixel] Inicializado con ID: ${tiktokPixelId}`);
-      })(window,document,'ttq');
+      })(window, document, "ttq");
+      console.log(`[TikTok Pixel] Inicializado con ID: ${tiktokPixelId}`);
     } catch (err) {
       console.error('[TikTok Pixel] Error al inicializar', err);
     }
   } else {
     console.log('[TikTok Pixel] Nota: VITE_TIKTOK_PIXEL_ID no configurado en variables de entorno.');
   }
+}
+
+// La landing es una SPA con rutas por hash (#/gracias, etc). TikTok solo cuenta
+// una visita al cargar el script, así que hay que avisarle a mano de cada
+// cambio de vista para que no todas las páginas cuenten como la misma.
+export function trackPageView(contenido?: { content_name?: string; content_category?: string }) {
+  if (typeof window === 'undefined') return;
+  try {
+    (window as any).ttq?.page();
+  } catch (err) {
+    console.warn('[TikTok Pixel] No se pudo enviar la vista de página:', err);
+  }
+  trackPixelEvent('ViewContent', contenido);
 }
 
 /**
@@ -98,11 +133,18 @@ export function trackPixelEvent(eventName: string, data?: { value?: number; curr
   // 2. TikTok Pixel event tracker
   try {
     if ((window as any).ttq) {
+      // TikTok llama "CompletePayment" a la compra confirmada (es el
+      // equivalente de Purchase). El event_id es lo que permite que TikTok
+      // deduplique el evento del navegador con el que manda el servidor por
+      // la Events API: si llegan los dos con el mismo event_id, cuenta una
+      // sola venta. Usamos el id del pedido, que es único.
       if (eventName === 'Purchase') {
         (window as any).ttq.track('CompletePayment', {
+          event_id: data?.event_id,
           value: data?.value || 0,
           currency: data?.currency || 'COP',
-          ...data
+          content_type: 'product',
+          ...data,
         });
       } else if (eventName === 'InitiateCheckout') {
         (window as any).ttq.track('InitiateCheckout', data);

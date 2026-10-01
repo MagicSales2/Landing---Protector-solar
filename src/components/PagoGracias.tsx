@@ -40,6 +40,10 @@ export default function PagoGracias() {
           setResultado(res);
           if (res.ok && res.estado === 'pagado') {
             trackPixelEvent('Purchase', {
+              // El mismo event_id lo usa el servidor en la Events API de TikTok:
+              // TikTok deduplica y cuenta la venta una sola vez aunque lleguen
+              // los dos eventos (navegador y servidor).
+              event_id: res.orderId,
               value: Number(res.total ?? 0),
               currency: 'COP',
               content_name: `Pedido ${res.orderId}`,

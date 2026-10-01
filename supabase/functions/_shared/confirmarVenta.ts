@@ -22,6 +22,7 @@ import { enviarAKommo, marcarMetodoPago, moverLeadAEstado, ResumenPedido } from 
 import { enviarTelegram, enlaceVentaKommo, etiquetaVentaKommo, esc } from './telegram.ts'
 import { generarGuiaPedido } from './envia.ts'
 import { avisoSheets } from './sheets.ts'
+import { enviarEventoTiktok } from './tiktok.ts'
 
 export const COLUMNAS_PEDIDO =
   'id, numero, client_name, client_phone, client_email, document_id, department, city, address, address2, notes, offer_name, quantity, total_price, payment_method, utm_source, utm_medium, utm_campaign, utm_content, utm_term, referrer, status, kommo_estado, kommo_lead_id, wompi_payment_link_id, wompi_transaction_id, wompi_status'
@@ -81,6 +82,35 @@ async function guiaParaPago(sb: SupabaseClient, kommoToken: string, fila: any) {
   } catch (err) {
     return { resumen: `📦 Guía: ⚠️ ${err instanceof Error ? err.message : String(err)}`, respuesta: null }
   }
+}
+
+// Conversión para TikTok por el lado del servidor (Events API). Se manda
+// cuando el pago queda confirmado, con los datos del cliente cifrados en
+// SHA-256 como exige TikTok. El event_id es el id del pedido: es el mismo que
+// manda el píxel del navegador, así que si llegan los dos TikTok cuenta una
+// sola venta. Si no hay token configurado, no hace nada.
+async function avisarTiktok(sb: SupabaseClient, fila: any) {
+  const resultado = await enviarEventoTiktok(
+    {
+      event: 'CompletePayment',
+      event_id: fila.id,
+      order_id: fila.id,
+      client_email: fila.client_email,
+      client_phone: fila.client_phone,
+      document_id: fila.document_id,
+      value: Number(fila.total_price),
+      currency: 'COP',
+      content_name: fila.offer_name || 'Protector Solar Anthelios SPF 50+',
+      content_ids: [fila.offer_id || 'anthelios'],
+      quantity: Number(fila.quantity),
+      user_agent: fila.user_agent,
+      referrer: fila.referrer,
+    },
+    async (estado, detalle) => {
+      await sb.from('sync_log').insert({ pedido_id: fila.id, destino: 'tiktok', estado, detalle })
+    },
+  )
+  return resultado
 }
 
 function aPedido(row: any): ResumenPedido {
@@ -148,6 +178,7 @@ export async function confirmarVenta(sb: SupabaseClient, kommoToken: string, fil
     // Guía de envío (pago ya aprobado) + aviso por Telegram.
     const guia = await guiaParaPago(sb, kommoToken, fila)
     await avisarPagoConfirmado(fila, kommoResumen, guia.resumen)
+    await avisarTiktok(sb, fila)
     avisoSheets(sb, id)
     return json({
       ok: true,
@@ -189,6 +220,7 @@ export async function confirmarVenta(sb: SupabaseClient, kommoToken: string, fil
   // Guía de envío (pago ya aprobado) + aviso por Telegram.
   const guia = await guiaParaPago(sb, kommoToken, fila)
   await avisarPagoConfirmado(fila, kommoResumen, guia.resumen)
+  await avisarTiktok(sb, fila)
   avisoSheets(sb, id)
 
   return json({

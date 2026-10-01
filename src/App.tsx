@@ -27,7 +27,7 @@ import PagoGracias from './components/PagoGracias';
 import { PRODUCT_OFFERS as FALLBACK_OFFERS } from './data';
 import { Order, OrderOffer } from './types';
 import { motion } from 'motion/react';
-import { initTracking, trackPixelEvent } from './lib/tracking';
+import { initTracking, trackPixelEvent, trackPageView } from './lib/tracking';
 import { iniciarRastreoVisitas } from './lib/visitas';
 import { getOfertas } from './lib/supabaseClient';
 
@@ -74,6 +74,21 @@ export default function App() {
     initTracking();
     trackPixelEvent('ViewContent', { content_name: 'Landing Page Anthelios Ultra Dry Touch' });
     iniciarRastreoVisitas();
+  }, []);
+
+  // La SPA no recarga al cambiar de vista (#/gracias, panel): hay que avisar a
+  // los píxeles de cada cambio de ruta o todas las páginas cuentan como una.
+  useEffect(() => {
+    const alCambiar = () => {
+      const hash = window.location.hash;
+      if (hash.startsWith('#/gracias')) {
+        trackPageView({ content_name: 'Página de gracias', content_category: 'gracias' });
+      } else if (hash === ADMIN_HASH) {
+        trackPageView({ content_name: 'Panel de administración', content_category: 'interno' });
+      }
+    };
+    window.addEventListener('hashchange', alCambiar);
+    return () => window.removeEventListener('hashchange', alCambiar);
   }, []);
 
   // Cargar precios reales desde la base de datos
