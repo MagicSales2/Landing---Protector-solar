@@ -43,7 +43,7 @@ jobs:
           # pixel es público: viaja dentro del bundle de la landing).
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-          VITE_SITE_URL: 'https://magicsales2.github.io/Landing---Protector-solar/'
+          VITE_SITE_URL: 'https://magicsales2.github.io/Landing---Protector-solar'
 
       - name: Publicar en la rama gh-pages
         uses: peaceiris/actions-gh-pages@v4
