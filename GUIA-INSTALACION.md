@@ -35,7 +35,7 @@ Todo lo que hace falta para que la página quede publicada. Si algo se traba, es
 3. En **Changes** selecciona todos los archivos modificados y presiona **Commit**.
 4. Presiona **Push** (arriba dice *Push origin*).
 5. Una vez subido, ve a <https://github.com/MagicSales2/Landing---Protector-solar/actions>. En unos 2 minutos aparecerá en verde el trabajo **Publicar landing**.
-6. La página queda actualizada en <https://magiasales2.github.io/Landing---Protector-solar/>.
+6. La página queda actualizada en <https://protectorsolar.skinoferta.cloud/>.
 
 > **Importante:** cada vez que quieras publicar un cambio, repites solo este paso: Commit + Push en GitHub Desktop.
 

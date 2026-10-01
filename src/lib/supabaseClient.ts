@@ -90,6 +90,10 @@ export async function createOrder(datos: NuevoPedido): Promise<PedidoCreado> {
       utm: leerUtm(),
       referrer: document.referrer || undefined,
       userAgent: navigator.userAgent,
+      // La URL de la landing tal como la vio el visitante. La usa el backend
+      // como page_url de los eventos de TikTok, para que en Events Manager
+      // aparezca el dominio real y no un valor por defecto.
+      pageUrl: window.location.href,
     },
   });
 

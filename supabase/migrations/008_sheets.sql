@@ -20,7 +20,10 @@ create table if not exists public.config_sheets (
 insert into public.config_sheets (clave, valor) values
   ('activo', 'false'),
   ('webhook_url', ''),
-  ('token', 'be1f6036b9724acb9497a5110f4b1d6f')
+  ('token', '')
+-- OJO: el token del webhook de Sheets NUNCA va en una migracion (esta queda
+-- publicada en el repo). Se carga en config_sheets con el secreto real y el
+-- codigo de Apps Script lo lee de ahi.
 on conflict (clave) do update set valor = excluded.valor;
 
 -- Etapas de Kommo relacionadas con estados que la hoja puede disparar.

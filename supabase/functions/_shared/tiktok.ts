@@ -24,6 +24,10 @@
 
 const URL_EVENTOS = 'https://api.tiktokbiz.com/open_api/v2/event/track/'
 
+// Dominio del sitio, por si algún evento llega sin page_url. Vive en el secreto
+// SITIO_URL para no tener que recompilar cuando cambia el dominio.
+const SITIO_POR_DEFECTO = (Deno.env.get('SITIO_URL') || 'https://protectorsolar.skinoferta.cloud').replace(/\/+$/, '') + '/'
+
 // TikTok exige SHA-256 en minúsculas y sin espacios sobrantes.
 async function sha256(valor: string): Promise<string> {
   const limpio = valor.trim().toLowerCase()
@@ -105,7 +109,7 @@ export async function enviarEventoTiktok(
       event_id: evento.event_id,
       ...(Object.keys(user).length ? { user } : {}),
       page: {
-        page_url: evento.page_url || 'https://magicsales2.github.io/Landing---Protector-solar/',
+        page_url: evento.page_url || SITIO_POR_DEFECTO,
         referrer: evento.referrer || '',
       },
       content: {

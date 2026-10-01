@@ -31,7 +31,10 @@ const CORS_HEADERS = {
 
 // Página a la que Wompi devuelve al cliente cuando termina de pagar.
 // Se manda el id del pedido para poder mostrar el estado real al volver.
-const SITIO = 'https://magicsales2.github.io/Landing---Protector-solar'
+// Vive en el secreto SITIO_URL de Supabase para no tener que recompilar el
+// backend cada vez que cambia el dominio. El valor de abajo es solo el plan B
+// por si el secreto no llegara a estar.
+const SITIO = (Deno.env.get('SITIO_URL') || 'https://protectorsolar.skinoferta.cloud').replace(/\/+$/, '')
 
 type PedidoEntrada = {
   clientName?: string

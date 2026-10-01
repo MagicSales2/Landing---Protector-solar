@@ -10,3 +10,7 @@ coverage/
 
 supabase/.temp/
 state.md
+
+# El codigo de Apps Script lleva el token del webhook de Sheets: no debe
+# subirse nunca a un repo publico (por ahi sefiltraron tokens antes).
+apps-script/Code.gs

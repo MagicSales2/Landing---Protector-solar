@@ -18,7 +18,7 @@ git push origin home
 ```
 
 Tarda ~1 minuto. Sale en:
-`https://magiasales2.github.io/Landing---Protector-solar/`
+`https://magicsales2.github.io/Landing---Protector-solar/`
 
 ### Hostinger (o cualquier hosting con Apache)
 
@@ -28,9 +28,17 @@ npm run lint
 npm run build
 ```
 
-Sin variables de entorno: la carpeta `dist/` ya está lista para subir. En
-Hostinger, sube el **contenido** de `dist/` a `public_html/` (el
-`.htaccess` que trae se encarga de la caché y la compresión).
+Sin variables de entorno: `dist/` ya sale compilado con el dominio de
+`.env.production` (`VITE_SITE_URL`). En Hostinger sube el **contenido** de
+`dist/` a `public_html/` (el `.htaccess` que trae se encarga de la caché y la
+compresión).
+
+Si algún día cambiás de dominio, ver "Cambiar el dominio" más abajo.
+
+### Dominio actual
+
+- Sitio: `https://protectorsolar.skinoferta.cloud/`
+- GitHub Pages queda como espejo: `https://magicsales2.github.io/Landing---Protector-solar/`
 
 ## Cambiar el dominio
 
