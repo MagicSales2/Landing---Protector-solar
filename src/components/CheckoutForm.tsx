@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { CreditCard, Truck, Check, AlertCircle, ShoppingCart } from 'lucide-react';
 import { COLOMBIA_REGIONS, Department } from '../lib/colombiaData';
 import { PRODUCT_OFFERS } from '../data';
@@ -33,10 +33,28 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
   const [phoneError, setPhoneError] = useState('');
   const [successOrder, setSuccessOrder] = useState<Order | null>(null);
   const [submitError, setSubmitError] = useState('');
+  // Al confirmar, la tarjeta de éxito es más corta que el formulario largo.
+  // Como la página se acorta, el navegador se quedaba mirando los videos de
+  // testimonios y el "pedido confirmado" quedaba fuera de la vista. Con esto
+  // lo traemos de vuelta al centro apenas aparece.
+  const confirmacionRef = useRef<HTMLDivElement>(null);
+  const [resaltarConfirmacion, setResaltarConfirmacion] = useState(false);
   // Link de pago de Wompi (único para este pedido).
   const [pagoUrl, setPagoUrl] = useState('');
   // True si el servidor creó el link y ya mandamos al cliente a pagar.
   const [redirigio, setRedirigio] = useState(false);
+  useEffect(() => {
+    if (!successOrder || redirigio) return;
+    setResaltarConfirmacion(true);
+    const t = setTimeout(() => setResaltarConfirmacion(false), 2600);
+    const t2 = setTimeout(() => {
+      confirmacionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 120);
+    return () => {
+      clearTimeout(t);
+      clearTimeout(t2);
+    };
+  }, [successOrder, redirigio]);
   // Campo invisible: los robots lo llenan solos, las personas nunca lo ven.
   const [websiteTrampa, setWebsiteTrampa] = useState('');
 
@@ -219,9 +237,14 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
   }, []);
 
   return (
-    <div id="formulario-pedido" className="scroll-mt-20">
+    <div>
       {successOrder ? (
-        <div className="bg-white border-2 border-emerald-500 rounded-3xl p-6 text-center max-w-lg mx-auto shadow-xl animate-fadeIn text-slate-800">
+        <div
+          ref={confirmacionRef}
+          className={`bg-white border-2 border-emerald-500 rounded-3xl p-6 text-center max-w-lg mx-auto shadow-xl animate-fadeIn text-slate-800 transition-shadow duration-500 ${
+            resaltarConfirmacion ? 'ring-4 ring-emerald-400/70 shadow-2xl shadow-emerald-500/30' : ''
+          }`}
+        >
           <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <Check className="w-8 h-8 text-emerald-600 stroke-[3]" />
           </div>

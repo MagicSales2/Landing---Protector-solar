@@ -44,9 +44,6 @@ export default function App() {
   const [stockCount, setStockCount] = useState<number>(12); // Urgency stock count
   const [timeLeft, setTimeLeft] = useState<number>(885); // 14 mins 45 secs countdown
   const [isTriggered, setIsTriggered] = useState<boolean>(false);
-  // El formulario de pedido se muestra encima de la página (modal), para que
-  // se vea de inmediato al hacer clic en cualquier botón de comprar.
-  const [formAbierto, setFormAbierto] = useState<boolean>(false);
   // Precios: empiezan con los del código y se sustituyen por los de Supabase
   // si la conexión funciona (así puedes cambiar precios sin tocar la página).
   const [ofertas, setOfertas] = useState<OrderOffer[]>(FALLBACK_OFFERS);
@@ -151,20 +148,24 @@ export default function App() {
     return () => clearInterval(stockInterval);
   }, []);
 
-  // El formulario se abre EN PANTALLA COMPLETA, no se hace scroll hasta él.
-  // Con el scroll suave el formulario quedaba a la vista en el sitio: al
-  // llegar a la parte de abajo de la página el navegador no puede bajar más y
-  // acababa mostrando los videos de testimonios en vez del formulario (y
-  // después, la confirmación del pedido tampoco se veía sin tener que buscar).
-  // Con el modal el formulario y su confirmación aparecen sí o sí.
-  const abrirFormulario = () => setFormAbierto(true);
-  const cerrarFormulario = () => setFormAbierto(false);
+  // El formulario vive fijo en su propia sección (#formulario-pedido), que
+  // está antes de los videos de testimonios. Al hacer clic en cualquier botón
+  // de comprar se hace scroll hasta esa sección.
+  const irAlFormulario = () => {
+    const seccion = document.getElementById('formulario-pedido');
+    if (!seccion) return;
+    // Se descuenta la barra fija de arriba para que el formulario no quede
+    // escondido debajo de ella.
+    const barraFija = 80;
+    const alto = seccion.getBoundingClientRect().top + window.scrollY - barraFija;
+    window.scrollTo({ top: Math.max(0, alto), behavior: 'smooth' });
+  };
 
   const handleScrollToForm = () => {
     trackPixelEvent('InitiateCheckout', {
       content_name: 'Botón Flotante Click'
     });
-    abrirFormulario();
+    irAlFormulario();
   };
 
   const handleOfferSelectAndScroll = (id: string) => {
@@ -180,25 +181,8 @@ export default function App() {
     } else {
       trackPixelEvent('InitiateCheckout');
     }
-    abrirFormulario();
+    irAlFormulario();
   };
-
-  // Cierra el modal del formulario con la tecla Escape y bloquea el scroll del
-  // fondo mientras está abierto (si no, el móvil hace scroll del documento
-  // detrás del formulario).
-  useEffect(() => {
-    if (!formAbierto) return;
-    const alPulsar = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setFormAbierto(false);
-    };
-    const scrollPrevio = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    window.addEventListener('keydown', alPulsar);
-    return () => {
-      document.body.style.overflow = scrollPrevio;
-      window.removeEventListener('keydown', alPulsar);
-    };
-  }, [formAbierto]);
 
   const handleOrderSuccess = (order: Order) => {
     setOrdersUpdatedToggle(prev => !prev);
@@ -694,30 +678,30 @@ export default function App() {
         </div>
       </section>
 
-      {/* 8. LLAMADO A PEDIR: el formulario real se abre en modal (más abajo) */}
-      <section className="py-16 px-4 bg-slate-950 text-white relative">
-        <div className="max-w-xl mx-auto text-center">
-          <span className="bg-orange-500 text-white text-[10px] font-black px-3 py-1 rounded-sm uppercase tracking-wider inline-block">
-            🚚 ENVÍO GRATIS + PAGO CONTRA ENTREGA
-          </span>
-          <h2 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight mt-3">
-            Completa tu Pedido Aquí
-          </h2>
-          <p className="mt-2 text-xs text-slate-400">
-            Ingresa tus datos reales. Procesamos tu pedido de manera inmediata para despacharlo hoy mismo.
-          </p>
+      {/* 8. FORMULARIO DE PEDIDO — va fijo acá, siempre visible. */}
+      <section id="formulario-pedido" className="py-16 px-4 bg-slate-950 text-white relative scroll-mt-24">
+        <div className="max-w-xl mx-auto">
+          <div className="text-center mb-8">
+            <span className="bg-orange-500 text-white text-[10px] font-black px-3 py-1 rounded-sm uppercase tracking-wider inline-block">
+              🚚 ENVÍO GRATIS + PAGO CONTRA ENTREGA
+            </span>
+            <h2 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight mt-3">
+              Completa tu Pedido Aquí
+            </h2>
+            <p className="mt-2 text-xs text-slate-400">
+              Ingresa tus datos reales. Procesamos tu pedido de manera inmediata para despacharlo hoy mismo.
+            </p>
+          </div>
 
-          <button
-            onClick={abrirFormulario}
-            id="abrir-formulario-pedido"
-            className="mt-7 w-full sm:w-auto bg-orange-600 hover:bg-orange-700 text-white font-black px-10 py-4 rounded-xl shadow-[0_8px_25px_rgba(240,90,40,0.4)] transition-all cursor-pointer transform hover:-translate-y-0.5 active:translate-y-0 text-sm md:text-base min-h-[48px]"
-          >
-            {ofertas.find(o => o.id === selectedOfferId)?.name.split(' (')[0] || 'PEDIR AHORA'}
-            {' · '}
-            {formatPrice(ofertas.find(o => o.id === selectedOfferId)?.price || 0)}
-          </button>
+          {/* Formulario de compra: siempre a la vista en esta sección */}
+          <CheckoutForm
+            selectedOfferId={selectedOfferId}
+            onOfferSelect={(id) => setSelectedOfferId(id)}
+            onOrderSuccess={handleOrderSuccess}
+            offers={ofertas}
+          />
 
-          <p className="mt-4 text-[11px] text-slate-500 font-medium">
+          <p className="mt-4 text-center text-[11px] text-slate-500 font-medium">
             Takes 1 minuto · Pagas al recibir · Te escribimos por WhatsApp
           </p>
         </div>
@@ -742,7 +726,7 @@ export default function App() {
             <span>•</span>
             <a href="#preguntas-frecuentes" className="hover:text-slate-300 transition-colors font-semibold">FAQs</a>
             <span>•</span>
-            <button onClick={abrirFormulario} className="hover:text-slate-300 transition-colors font-semibold cursor-pointer">Pedir Ahora</button>
+            <button onClick={irAlFormulario} className="hover:text-slate-300 transition-colors font-semibold cursor-pointer">Pedir Ahora</button>
           </div>
           <p className="text-[10px] text-slate-600 pt-3">
             © 2026 Skin Ofertas Colombia. Todos los derechos reservados.
@@ -782,48 +766,6 @@ export default function App() {
 
       {/* Página final tras pagar en Wompi (muestra el estado del pago) */}
       {showGracias && !showAdminModal && <PagoGracias />}
-
-      {/* FORMULARIO DE PEDIDO EN MODAL: se abre sobre la página al hacer clic
-          en cualquier botón de comprar, para que nunca quede escondido al
-          final de la landing. Contiene el formulario y su confirmación. */}
-      {formAbierto && !showAdminModal && !showGracias && (
-        <div
-          className="fixed inset-0 z-[90] flex items-start sm:items-center justify-center overflow-y-auto bg-slate-950/80 backdrop-blur-sm p-0 sm:p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Formulario de pedido"
-        >
-          <div className="relative w-full sm:max-w-xl bg-slate-50 min-h-screen sm:min-h-0 sm:rounded-3xl shadow-2xl my-0 sm:my-8">
-            <button
-              onClick={cerrarFormulario}
-              aria-label="Cerrar formulario"
-              className="sticky top-0 z-10 w-full bg-slate-950 text-white px-4 py-3 flex items-center justify-between gap-3 cursor-pointer hover:bg-slate-900 transition-colors rounded-t-3xl"
-            >
-              <span className="text-left leading-tight">
-                <span className="block text-[9px] font-black uppercase tracking-wider text-orange-500">
-                  🚚 Envío gratis · paga al recibir
-                </span>
-                <span className="block text-sm font-extrabold text-white">
-                  {ofertas.find(o => o.id === selectedOfferId)?.name.split(' (')[0] || 'Completa tu pedido'}
-                </span>
-              </span>
-              <span className="flex items-center gap-2 shrink-0">
-                <span className="text-sm font-black text-white">{formatPrice(ofertas.find(o => o.id === selectedOfferId)?.price || 0)}</span>
-                <span className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-lg leading-none" aria-hidden="true">×</span>
-              </span>
-            </button>
-
-            <div className="px-4 py-5 sm:px-6 sm:py-6">
-              <CheckoutForm
-                selectedOfferId={selectedOfferId}
-                onOfferSelect={(id) => setSelectedOfferId(id)}
-                onOrderSuccess={handleOrderSuccess}
-                offers={ofertas}
-              />
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* AUTOMATED ADVISORY BOT / FAQ ASSISTANT */}
       <AdvisorBot />
