@@ -1,0 +1,29 @@
+# Lo que se copia dentro de la imagen con "COPY . .".
+#
+# Sin este archivo, Docker se lleva node_modules (164 MB) de la máquina que
+# construyó la imagen. Esos binarios (esbuild, rollup) están compilados para
+# el sistema operativo de esa máquina y NO funcionan dentro del contenedor:
+# "npm run build" falla y la imagen vieja sigue sirviendo el sitio viejo.
+
+node_modules
+dist
+.git
+.gitignore
+*.log
+npm-debug.log*
+
+# El build de la landing no necesita nada de esto: es backend, no frontend.
+supabase
+apps-script
+state.md
+
+# Documentación
+README.md
+DEPLOY.md
+GUIA-INSTALACION.md
+OPEN_CODE_GUIDE.md
+
+# El propio Docker
+Dockerfile
+docker-compose.yml
+.dockerignore

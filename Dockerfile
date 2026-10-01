@@ -1,10 +1,14 @@
 # build stage
 FROM node:20-alpine AS build
 WORKDIR /app
+# npm ci en vez de npm install: instala exactamente lo que dice el
+# package-lock.json. "npm install" puede resolver versiones nuevas y romper el
+# build sin que se haya tocado nada.
 COPY package*.json ./
-# Using npm install is safer in diverse environments if package-lock needs minor resolution
-RUN npm install
+RUN npm ci
 COPY . .
+# El .dockerignore saca node_modules de la máquina: acá entra el que instaló
+# npm ci, compilado para esta imagen. Si se cuela el de afuera, el build falla.
 RUN npm run build
 
 # run stage (static using custom high-performance Nginx)
