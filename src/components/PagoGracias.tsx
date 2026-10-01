@@ -46,8 +46,10 @@ export default function PagoGracias() {
               event_id: res.orderId,
               value: Number(res.total ?? 0),
               currency: 'COP',
+              content_id: res.orderId,
               content_name: `Pedido ${res.orderId}`,
               content_type: 'product',
+              num_items: 1,
             });
             setEstado('ok');
           } else if (intentos < 10) {

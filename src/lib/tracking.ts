@@ -104,8 +104,42 @@ export function trackPageView(contenido?: { content_name?: string; content_categ
  * marcar la cuenta como suspecta de ventas ficticias. Para capturas de
  * formularios usa "Lead".
  */
+/**
+ * TikTok marca error "Crítico" cuando más del 10% de los eventos llegan sin
+ * `content_id`, y eso baja el CPA de los anuncios que usan Video Shopping Ads.
+ * Además el evento se ignora si el `content_id` viene vacío o es un espacio.
+ *
+ * Por eso, antes de mandar cualquier evento, se revisa que `content_id` tenga
+ * algo de verdad. Si algún sitio del código se olvida de ponerlo, esta función
+ * lo completa sola y el evento nunca sale sin él.
+ */
+const CONTENT_ID_POR_DEFECTO = 'skin-ofertas-protector-solar';
+
+function completarContenido(eventName: string, data?: Record<string, any>) {
+  const contenido: Record<string, any> = { ...(data || {}) };
+
+  // content_id: obligatorio y nunca vacío ni solo espacios.
+  const idOriginal = contenido.content_id;
+  if (typeof idOriginal !== 'string' || idOriginal.trim() === '') {
+    contenido.content_id = CONTENT_ID_POR_DEFECTO;
+  } else {
+    contenido.content_id = idOriginal.trim();
+  }
+
+  // El resto de parámetros de producto que TikTok espera junto al content_id.
+  if (!contenido.content_type) contenido.content_type = 'product';
+  if (!contenido.content_name) contenido.content_name = 'Protector Solar Skin Ofertas';
+  if (contenido.quantity === undefined && contenido.num_items !== undefined) {
+    contenido.quantity = contenido.num_items;
+  }
+
+  return contenido;
+}
+
 export function trackPixelEvent(eventName: string, data?: { value?: number; currency?: string; [key: string]: any }) {
   if (typeof window === 'undefined') return;
+
+  const datos = completarContenido(eventName, data as Record<string, any> | undefined);
 
   // 1. Meta Pixel event tracker
   try {
@@ -115,16 +149,16 @@ export function trackPixelEvent(eventName: string, data?: { value?: number; curr
         (window as any).fbq('track', 'Purchase', {
           value: data?.value || 0,
           currency: data?.currency || 'COP',
-          ...data
+          ...datos
         });
       } else if (eventName === 'InitiateCheckout') {
-        (window as any).fbq('track', 'InitiateCheckout', data);
+        (window as any).fbq('track', 'InitiateCheckout', datos);
       } else if (eventName === 'Lead') {
-        (window as any).fbq('track', 'Lead', data);
+        (window as any).fbq('track', 'Lead', datos);
       } else {
-        (window as any).fbq('track', eventName, data);
+        (window as any).fbq('track', eventName, datos);
       }
-      console.log(`[Meta Pixel Evento] Enviado: ${eventName}`, data);
+      console.log(`[Meta Pixel Evento] Enviado: ${eventName}`, datos);
     }
   } catch (err) {
     console.warn('[Meta Pixel Tracking] No se pudo enviar el evento:', err);
@@ -143,17 +177,16 @@ export function trackPixelEvent(eventName: string, data?: { value?: number; curr
           event_id: data?.event_id,
           value: data?.value || 0,
           currency: data?.currency || 'COP',
-          content_type: 'product',
-          ...data,
+          ...datos,
         });
       } else if (eventName === 'InitiateCheckout') {
-        (window as any).ttq.track('InitiateCheckout', data);
+        (window as any).ttq.track('InitiateCheckout', datos);
       } else if (eventName === 'Lead') {
-        (window as any).ttq.track('SubmitForm', data);
+        (window as any).ttq.track('SubmitForm', datos);
       } else {
-        (window as any).ttq.track(eventName, data);
+        (window as any).ttq.track(eventName, datos);
       }
-      console.log(`[TikTok Pixel Evento] Enviado: ${eventName}`, data);
+      console.log(`[TikTok Pixel Evento] Enviado: ${eventName}`, datos);
     }
   } catch (err) {
     console.warn('[TikTok Pixel Tracking] No se pudo enviar el evento:', err);

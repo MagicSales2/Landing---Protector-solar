@@ -165,8 +165,10 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
     trackPixelEvent('Lead', {
       value: newOrder.totalPrice,
       currency: 'COP',
+      content_id: newOrder.offerId,
       content_name: newOrder.offerName,
-      content_type: 'product'
+      content_type: 'product',
+      num_items: newOrder.quantity,
     });
 
     // Con Contra Entrega el pago ocurre cuando el cliente recibe el paquete,
@@ -179,6 +181,7 @@ export default function CheckoutForm({ selectedOfferId, onOfferSelect, onOrderSu
         event_id: newOrder.id,
         value: newOrder.totalPrice,
         currency: 'COP',
+        content_id: newOrder.offerId,
         content_name: newOrder.offerName,
         content_type: 'product',
         num_items: newOrder.quantity

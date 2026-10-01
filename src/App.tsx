@@ -72,7 +72,14 @@ export default function App() {
   // Initialize tracking on mount
   useEffect(() => {
     initTracking();
-    trackPixelEvent('ViewContent', { content_name: 'Landing Page Anthelios Ultra Dry Touch' });
+    trackPixelEvent('ViewContent', {
+      content_id: 'skin-ofertas-landing',
+      content_name: 'Landing Skin Ofertas - Protector Solar',
+      content_type: 'product',
+      num_items: 1,
+      value: ofertas.length ? ofertas[0].price : 0,
+      currency: 'COP',
+    });
     iniciarRastreoVisitas();
   }, []);
 
@@ -162,8 +169,14 @@ export default function App() {
   };
 
   const handleScrollToForm = () => {
+    const seleccion = ofertas.find(o => o.id === selectedOfferId);
     trackPixelEvent('InitiateCheckout', {
-      content_name: 'Botón Flotante Click'
+      content_id: seleccion?.id || 'skin-ofertas-landing',
+      content_name: seleccion?.name || 'Botón Flotante Click',
+      content_type: 'product',
+      num_items: seleccion?.quantity || 1,
+      value: seleccion?.price || 0,
+      currency: 'COP',
     });
     irAlFormulario();
   };
@@ -173,13 +186,21 @@ export default function App() {
     const selectedOffer = ofertas.find(o => o.id === id);
     if (selectedOffer) {
       trackPixelEvent('InitiateCheckout', {
+        content_id: selectedOffer.id,
         content_name: selectedOffer.name,
+        content_type: 'product',
         num_items: selectedOffer.quantity,
         value: selectedOffer.price,
         currency: 'COP'
       });
     } else {
-      trackPixelEvent('InitiateCheckout');
+      trackPixelEvent('InitiateCheckout', {
+        content_id: 'skin-ofertas-landing',
+        content_name: 'Selección de oferta',
+        content_type: 'product',
+        num_items: 1,
+        currency: 'COP',
+      });
     }
     irAlFormulario();
   };
